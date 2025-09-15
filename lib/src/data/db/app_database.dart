@@ -7,8 +7,6 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
-
-
 // -----------------
 // Tables
 // -----------------
@@ -24,7 +22,6 @@ class Exercises extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-
 class Plans extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -32,41 +29,232 @@ class Plans extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-
 class PlanExercises extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get planId => integer().references(Plans, #id, onDelete: KeyAction.cascade)();
-  IntColumn get exerciseId => integer().references(Exercises, #id, onDelete: KeyAction.restrict)();
+  IntColumn get planId =>
+      integer().references(Plans, #id, onDelete: KeyAction.cascade)();
+  IntColumn get exerciseId =>
+      integer().references(Exercises, #id, onDelete: KeyAction.restrict)();
   IntColumn get order => integer().withDefault(const Constant(0))();
   IntColumn get sets => integer().withDefault(const Constant(3))();
   IntColumn get repMin => integer().withDefault(const Constant(5))();
   IntColumn get repMax => integer().withDefault(const Constant(8))();
   RealColumn get weightStep => real().withDefault(const Constant(2.5))();
   RealColumn get initialWeight => real().nullable()();
+
   @override
   List<String> get customConstraints => [
     'UNIQUE(plan_id, exercise_id, "order")',
   ];
 }
 
-
 class Workouts extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get planId => integer().references(Plans, #id, onDelete: KeyAction.setNull).nullable()();
+  IntColumn get planId =>
+      integer().references(Plans, #id, onDelete: KeyAction.setNull).nullable()();
   DateTimeColumn get startedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get finishedAt => dateTime().nullable()();
   TextColumn get note => text().nullable()();
 }
 
-
 class WorkoutSets extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get workoutId => integer().references(Workouts, #id, onDelete: KeyAction.cascade)();
-  IntColumn get planExerciseId => integer().references(PlanExercises, #id, onDelete: KeyAction.restrict)();
+  IntColumn get workoutId =>
+      integer().references(Workouts, #id, onDelete: KeyAction.cascade)();
+  IntColumn get planExerciseId =>
+      integer().references(PlanExercises, #id, onDelete: KeyAction.restrict)();
   IntColumn get setIndex => integer()();
   RealColumn get targetWeight => real().withDefault(const Constant(0))();
   RealColumn get actualWeight => real().nullable()();
   IntColumn get actualReps => integer().nullable()();
 
+  @override
+  List<String> get customConstraints =>
+      ['UNIQUE(workout_id, plan_exercise_id, set_index)'];
+}
 
+class Settings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  BoolColumn get unitKg => boolean().withDefault(const Constant(true))();
+  IntColumn get themeMode => integer().withDefault(const Constant(0))(); // 0=system
+  RealColumn get defaultWeightStep => real().withDefault(const Constant(2.5))();
+}
+
+// -----------------
+// Database + DAOs
+// -----------------
+@DriftDatabase(
+  tables: [
+    Exercises,
+    Plans,
+    PlanExercises,
+    Workouts,
+    WorkoutSets,
+    Settings,
+  ],
+  daos: [
+    ExercisesDao,
+    PlansDao,
+    PlanExercisesDao,
+    WorkoutsDao,
+    WorkoutSetsDao,
+    SettingsDao,
+  ],
+)
+class AppDatabase extends _$AppDatabase {
+  AppDatabase() : super(_openConnection());
+
+  // In-Memory für Tests
+  AppDatabase.test() : super(NativeDatabase.memory());
+
+  @override
+  int get schemaVersion => 1;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    // FK-Constraints auf JEDER Connection aktivieren (auch In-Memory bei Tests)
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+    onCreate: (m) async {
+      await m.createAll();
+      await _seedData(this);
+    },
+    onUpgrade: (m, from, to) async {
+      // zukünftige Migrationen
+    },
+  );
+}
+
+LazyDatabase _openConnection() {
+  return LazyDatabase(() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final dbFile = File(p.join(dir.path, 'gymtrackr.sqlite'));
+    return NativeDatabase(dbFile);
+  });
+}
+
+Future<void> _seedData(AppDatabase db) async {
+  await db.into(db.settings).insert(const SettingsCompanion());
+  await db.into(db.exercises).insert(ExercisesCompanion.insert(
+    name: 'Bankdrücken (Langhantel)',
+    group: const Value('Brust'),
+    defaultWeightStep: const Value(2.5),
+    defaultRepMin: const Value(5),
+    defaultRepMax: const Value(8),
+    notes: const Value('Flachbank, Schulterblätter fixieren'),
+  ));
+  await db.into(db.exercises).insert(ExercisesCompanion.insert(
+    name: 'Kniebeuge (Langhantel)',
+    group: const Value('Beine'),
+    defaultWeightStep: const Value(2.5),
+    defaultRepMin: const Value(5),
+    defaultRepMax: const Value(8),
+    notes: const Value('Tief, Core stabil'),
+  ));
+}
+
+// -----------------
+// DAOs
+// -----------------
+@DriftAccessor(tables: [Exercises])
+class ExercisesDao extends DatabaseAccessor<AppDatabase>
+    with _$ExercisesDaoMixin {
+  ExercisesDao(AppDatabase db) : super(db);
+
+  Future<int> create(ExercisesCompanion data) => into(exercises).insert(data);
+  Future<List<Exercise>> all() => select(exercises).get();
+  Stream<List<Exercise>> watchAll() => select(exercises).watch();
+
+  Future<bool> updateById(int id, ExercisesCompanion data) async {
+    final count =
+    await (update(exercises)..where((t) => t.id.equals(id))).write(data);
+    return count > 0;
+  }
+
+  Future<int> deleteById(int id) =>
+      (delete(exercises)..where((t) => t.id.equals(id))).go();
+}
+
+@DriftAccessor(tables: [Plans])
+class PlansDao extends DatabaseAccessor<AppDatabase> with _$PlansDaoMixin {
+  PlansDao(AppDatabase db) : super(db);
+
+  Future<int> create(PlansCompanion data) => into(plans).insert(data);
+  Future<List<Plan>> all() => select(plans).get();
+
+  Future<bool> updateById(int id, PlansCompanion data) async {
+    final count =
+    await (update(plans)..where((t) => t.id.equals(id))).write(data);
+    return count > 0;
+  }
+
+  Future<int> deleteById(int id) =>
+      (delete(plans)..where((t) => t.id.equals(id))).go();
+}
+
+@DriftAccessor(tables: [PlanExercises, Exercises])
+class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
+    with _$PlanExercisesDaoMixin {
+  PlanExercisesDao(AppDatabase db) : super(db);
+
+  Future<int> add(PlanExercisesCompanion data) =>
+      into(planExercises).insert(data);
+
+  Future<List<PlanExercise>> byPlan(int planId) =>
+      (select(planExercises)
+        ..where((t) => t.planId.equals(planId))
+        ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+          .get();
+
+  Future<int> removeById(int id) =>
+      (delete(planExercises)..where((t) => t.id.equals(id))).go();
+}
+
+@DriftAccessor(tables: [Workouts])
+class WorkoutsDao extends DatabaseAccessor<AppDatabase>
+    with _$WorkoutsDaoMixin {
+  WorkoutsDao(AppDatabase db) : super(db);
+
+  Future<int> startWorkout(int? planId) =>
+      into(workouts).insert(WorkoutsCompanion.insert(planId: Value(planId)));
+
+  Future<int> deleteById(int id) =>
+      (delete(workouts)..where((t) => t.id.equals(id))).go();
+}
+
+@DriftAccessor(tables: [WorkoutSets])
+class WorkoutSetsDao extends DatabaseAccessor<AppDatabase>
+    with _$WorkoutSetsDaoMixin {
+  WorkoutSetsDao(AppDatabase db) : super(db);
+
+  Future<int> add(WorkoutSetsCompanion data) =>
+      into(workoutSets).insert(data);
+
+  Future<List<WorkoutSet>> byWorkout(int workoutId) =>
+      (select(workoutSets)
+        ..where((t) => t.workoutId.equals(workoutId))
+        ..orderBy([(t) => OrderingTerm.asc(t.setIndex)]))
+          .get();
+
+  Future<int> removeByWorkout(int workoutId) =>
+      (delete(workoutSets)..where((t) => t.workoutId.equals(workoutId))).go();
+}
+
+@DriftAccessor(tables: [Settings])
+class SettingsDao extends DatabaseAccessor<AppDatabase>
+    with _$SettingsDaoMixin {
+  SettingsDao(AppDatabase db) : super(db);
+
+  Future<Setting?> load() async {
+    final rows = await select(settings).get();
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<bool> updateTheme(int mode) async {
+    final count = await (update(settings)..where((t) => t.id.equals(1))).write(
+      SettingsCompanion(themeMode: Value(mode)),
+    );
+    return count > 0;
+  }
 }

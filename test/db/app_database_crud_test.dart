@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:drift/drift.dart' hide isNotNull;
+import 'package:drift/drift.dart' hide isNotNull; // wichtig: vermeidet Namenskonflikt
 import 'package:gymtrackr/src/data/db/app_database.dart';
 
 void main() {
@@ -40,8 +40,8 @@ void main() {
 
       final peId = await db.planExercisesDao.add(
         PlanExercisesCompanion.insert(
-          planId: Value(planId),
-          exerciseId: Value(exId),
+          planId: planId,            // Pflichtfelder -> KEIN Value()
+          exerciseId: exId,          // Pflichtfelder -> KEIN Value()
           order: const Value(1),
           sets: const Value(3),
           repMin: const Value(5),
@@ -64,20 +64,22 @@ void main() {
       await db.plansDao.create(PlansCompanion.insert(name: 'GK B'));
       final exId =
       await db.exercisesDao.create(ExercisesCompanion.insert(name: 'Kniebeuge'));
+
       final peId = await db.planExercisesDao.add(
         PlanExercisesCompanion.insert(
-          planId: Value(planId),
-          exerciseId: Value(exId),
+          planId: planId,           // Pflichtfelder -> KEIN Value()
+          exerciseId: exId,         // Pflichtfelder -> KEIN Value()
           order: const Value(1),
         ),
       );
 
       final wId = await db.workoutsDao.startWorkout(planId);
+
       await db.workoutSetsDao.add(
         WorkoutSetsCompanion.insert(
-          workoutId: Value(wId),
-          planExerciseId: Value(peId),
-          setIndex: const Value(0),
+          workoutId: wId,           // Pflichtfelder -> KEIN Value()
+          planExerciseId: peId,     // Pflichtfelder -> KEIN Value()
+          setIndex: 0,              // Pflichtfelder -> KEIN Value()
           targetWeight: const Value(60),
         ),
       );
