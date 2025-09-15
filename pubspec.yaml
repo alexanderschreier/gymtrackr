@@ -16,6 +16,8 @@ dependencies:
   drift:
   sqlite3_flutter_libs:
   freezed_annotation:
+  path_provider:
+  path:
 
 
 dev_dependencies:
