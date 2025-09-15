@@ -221,6 +221,10 @@ class WorkoutsDao extends DatabaseAccessor<AppDatabase>
 
   Future<int> deleteById(int id) =>
       (delete(workouts)..where((t) => t.id.equals(id))).go();
+
+  Future<int> finish(int id, DateTime finishedAt) =>
+      (update(workouts)..where((t) => t.id.equals(id)))
+          .write(WorkoutsCompanion(finishedAt: Value(finishedAt)));
 }
 
 @DriftAccessor(tables: [WorkoutSets])
@@ -239,6 +243,16 @@ class WorkoutSetsDao extends DatabaseAccessor<AppDatabase>
 
   Future<int> removeByWorkout(int workoutId) =>
       (delete(workoutSets)..where((t) => t.workoutId.equals(workoutId))).go();
+
+  Future<bool> updateResult(int id, {double? actualWeight, int? actualReps}) async {
+    final count = await (update(workoutSets)..where((t) => t.id.equals(id))).write(
+      WorkoutSetsCompanion(
+        actualWeight: actualWeight == null ? const Value.absent() : Value(actualWeight),
+        actualReps: actualReps == null ? const Value.absent() : Value(actualReps),
+      ),
+    );
+    return count > 0;
+  }
 }
 
 @DriftAccessor(tables: [Settings])
