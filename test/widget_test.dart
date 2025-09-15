@@ -1,30 +1,46 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:gymtrackr/main.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:gymtrackr/src/app.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Bottom navigation with 5 tabs is visible and tappable', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: GymTrackrApp()));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // NavigationBar vorhanden
+    final navBar = find.byType(NavigationBar);
+    expect(navBar, findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Tabs (Labels) sind in der NavigationBar sichtbar
+    expect(find.descendant(of: navBar, matching: find.text('Heute')), findsOneWidget);
+    expect(find.descendant(of: navBar, matching: find.text('Pläne')), findsOneWidget);
+    expect(find.descendant(of: navBar, matching: find.text('Übungen')), findsOneWidget);
+    expect(find.descendant(of: navBar, matching: find.text('Historie')), findsOneWidget);
+    expect(find.descendant(of: navBar, matching: find.text('Einstellungen')), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Start: Heute-Seite ist aktiv
+    expect(find.byKey(const Key('title-today')), findsOneWidget);
+
+    // Zu "Pläne" wechseln
+    await tester.tap(find.descendant(of: navBar, matching: find.text('Pläne')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('title-plans')), findsOneWidget);
+    expect(find.byKey(const Key('title-today')), findsNothing);
+
+    // Zu "Übungen" wechseln
+    await tester.tap(find.descendant(of: navBar, matching: find.text('Übungen')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('title-exercises')), findsOneWidget);
+
+    // Zu "Historie" wechseln
+    await tester.tap(find.descendant(of: navBar, matching: find.text('Historie')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('title-history')), findsOneWidget);
+
+    // Zu "Einstellungen" wechseln
+    await tester.tap(find.descendant(of: navBar, matching: find.text('Einstellungen')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('title-settings')), findsOneWidget);
   });
 }
