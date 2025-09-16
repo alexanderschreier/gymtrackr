@@ -16,12 +16,13 @@ class PlanEditorPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Plan bearbeiten')),
-      body: StreamBuilder<List<PlanExercise>>(                            // Stream: sofortiges Update
+      body: StreamBuilder<List<PlanExercise>>( // ← live updates
         stream: peDao.watchByPlan(planId),
         builder: (context, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final planExercises = snap.data!;
-          return FutureBuilder<List<Exercise>>(                           // Übungen laden (Name anzeigen)
+
+          return FutureBuilder<List<Exercise>>( // Übungsnamen laden
             future: exDao.all(),
             builder: (context, exSnap) {
               if (!exSnap.hasData) return const Center(child: CircularProgressIndicator());
@@ -37,17 +38,19 @@ class PlanEditorPage extends ConsumerWidget {
                         child: OutlinedButton.icon(
                           key: const Key('btn-add-plan-exercise'),
                           onPressed: () async {
-                            // Auswahl der Übung (alphabetisch)
-                            final sorted = [...exercises]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                            // Alphabetische Auswahl
+                            final sorted = [...exercises]
+                              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
                             final chosen = await showDialog<Exercise>(
                               context: context,
                               builder: (_) => SimpleDialog(
                                 title: const Text('Übung hinzufügen'),
                                 children: sorted
                                     .map((e) => SimpleDialogOption(
-                                  onPressed: () => Navigator.pop(context, e),
-                                  child: Text(e.name),
-                                ))
+                                          onPressed: () => Navigator.pop(context, e),
+                                          child: Text(e.name),
+                                        ))
                                     .toList(),
                               ),
                             );
@@ -81,7 +84,7 @@ class PlanEditorPage extends ConsumerWidget {
                               repMin: const Value(5),
                               repMax: const Value(8),
                               weightStep: const Value(2.5),
-                              initialWeight: Value(initW),                  // ← wichtig: kein 0-Ziel
+                              initialWeight: Value(initW),
                             ));
                           },
                           icon: const Icon(Icons.add),

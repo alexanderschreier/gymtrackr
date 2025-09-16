@@ -21,12 +21,16 @@ class PlansPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pläne')),
-      body: StreamBuilder<List<Plan>>(                           // Stream statt Future
-        stream: plansDao.watchAll(),
+      body: StreamBuilder<List<Plan>>(
+        stream: plansDao.watchAll(), // live updates
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
           final items = snap.data!;
-          if (items.isEmpty) return const Center(child: Text('Noch keine Pläne. Lege den ersten an.'));
+          if (items.isEmpty) {
+            return const Center(child: Text('Noch keine Pläne. Lege den ersten an.'));
+          }
 
           return ListView.separated(
             padding: const EdgeInsets.all(12),
@@ -37,10 +41,12 @@ class PlansPage extends ConsumerWidget {
               return ListTile(
                 title: Text(p.name),
                 onTap: () async {
-                  await Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => PlanEditorPage(planId: p.id),
-                  ));
+                  // Editor öffnen
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => PlanEditorPage(planId: p.id)),
+                  );
                 },
+                // Play + Settings
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -56,42 +62,26 @@ class PlansPage extends ConsumerWidget {
                       tooltip: 'Einstellungen',
                       icon: const Icon(Icons.settings),
                       onPressed: () async {
+                        // Aktion wählen (einfacher, direkter Dialog)
                         final action = await showDialog<_PlanAction>(
                           context: context,
                           builder: (_) => SimpleDialog(
                             title: Text('Plan: ${p.name}'),
-                            children: const [
+                            children: [
                               SimpleDialogOption(
-                                child: Text('Umbenennen'),
-                                // Rückgabe über Navigator.pop im onPressed
-                              ),
-                              SimpleDialogOption(
-                                child: Text('Löschen'),
-                              ),
-                            ],
-                          ),
-                        );
-                        // Workaround: Wir müssen wissen, welche Option geklickt wurde.
-                        // Einfacher: eigenen Dialog bauen:
-                        final result = await showDialog<_PlanAction>(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: Text('Plan: ${p.name}'),
-                            content: const Text('Aktion wählen'),
-                            actions: [
-                              TextButton(
                                 onPressed: () => Navigator.pop(context, _PlanAction.rename),
                                 child: const Text('Umbenennen'),
                               ),
-                              FilledButton(
+                              SimpleDialogOption(
                                 onPressed: () => Navigator.pop(context, _PlanAction.delete),
                                 child: const Text('Löschen'),
                               ),
                             ],
                           ),
                         );
+                        if (action == null) return;
 
-                        if (result == _PlanAction.rename) {
+                        if (action == _PlanAction.rename) {
                           final ctrl = TextEditingController(text: p.name);
                           final ok = await showDialog<bool>(
                             context: context,
@@ -102,8 +92,14 @@ class PlansPage extends ConsumerWidget {
                                 decoration: const InputDecoration(labelText: 'Name'),
                               ),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Abbrechen')),
-                                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Speichern')),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Abbrechen'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Speichern'),
+                                ),
                               ],
                             ),
                           );
@@ -112,23 +108,29 @@ class PlansPage extends ConsumerWidget {
                               p.id,
                               PlansCompanion(name: Value(ctrl.text.trim())),
                             );
-                            // Stream liefert danach automatisch den neuen Namen
+                            // Durch den Stream aktualisiert sich die Liste sofort.
                           }
-                        } else if (result == _PlanAction.delete) {
+                        } else if (action == _PlanAction.delete) {
                           final sure = await showDialog<bool>(
                             context: context,
                             builder: (_) => AlertDialog(
                               title: const Text('Plan löschen?'),
                               content: const Text('Dieser Vorgang kann nicht rückgängig gemacht werden.'),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Abbrechen')),
-                                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Löschen')),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Abbrechen'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Löschen'),
+                                ),
                               ],
                             ),
                           );
                           if (sure == true) {
-                            await plansDao.safeDelete(p.id); // FK-safe
-                            // Stream entfernt den Plan sofort aus der Liste
+                            await plansDao.safeDelete(p.id); // FK-safe: planId→NULL in Workouts, PlanExercises löschen, Plan löschen
+                            // Stream entfernt den Plan sofort aus der Liste.
                           }
                         }
                       },
@@ -152,8 +154,14 @@ class PlansPage extends ConsumerWidget {
                 decoration: const InputDecoration(labelText: 'Name'),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Abbrechen')),
-                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Anlegen')),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Abbrechen'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Anlegen'),
+                ),
               ],
             ),
           );

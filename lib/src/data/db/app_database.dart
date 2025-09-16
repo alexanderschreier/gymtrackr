@@ -223,6 +223,9 @@ class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
     with _$PlanExercisesDaoMixin {
   PlanExercisesDao(AppDatabase db) : super(db);
 
+  Future<List<PlanExercise>> byIds(List<int> ids) =>
+      (select(planExercises)..where((t) => t.id.isIn(ids))).get();
+
   Future<int> add(PlanExercisesCompanion data) =>
       into(planExercises).insert(data);
 
