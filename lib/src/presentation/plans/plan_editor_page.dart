@@ -24,6 +24,7 @@ class PlanEditorPage extends ConsumerWidget {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final planExercises = snap.data![1] as List<PlanExercise>;
           final exercises = snap.data![2] as List<Exercise>;
+          exercises.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
           return ListView(
             padding: const EdgeInsets.all(12),

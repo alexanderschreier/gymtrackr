@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../today/today_page.dart';
+import '../start/start_page.dart';
 import '../plans/plans_page.dart';
 import '../exercises/exercises_page.dart';
 import '../history/history_page.dart';
@@ -17,7 +17,7 @@ class _HomeScaffoldState extends State<HomeScaffold> {
 
   // Wichtig: Liste selbst 'const' UND Elemente 'const'
   static const List<Widget> _pages = <Widget>[
-    TodayPage(),
+    StartPage(),
     PlansPage(),
     ExercisesPage(),
     HistoryPage(),
