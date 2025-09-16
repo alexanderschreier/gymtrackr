@@ -41,12 +41,10 @@ class PlansPage extends ConsumerWidget {
               return ListTile(
                 title: Text(p.name),
                 onTap: () async {
-                  // Editor öffnen
                   await Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => PlanEditorPage(planId: p.id)),
                   );
                 },
-                // Play + Settings
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -62,7 +60,6 @@ class PlansPage extends ConsumerWidget {
                       tooltip: 'Einstellungen',
                       icon: const Icon(Icons.settings),
                       onPressed: () async {
-                        // Aktion wählen (einfacher, direkter Dialog)
                         final action = await showDialog<_PlanAction>(
                           context: context,
                           builder: (_) => SimpleDialog(
@@ -129,7 +126,7 @@ class PlansPage extends ConsumerWidget {
                             ),
                           );
                           if (sure == true) {
-                            await plansDao.safeDelete(p.id); // FK-safe: planId→NULL in Workouts, PlanExercises löschen, Plan löschen
+                            await plansDao.safeDelete(p.id); // FK-safe: Workouts.planId→NULL, PlanExercises löschen, Plan löschen
                             // Stream entfernt den Plan sofort aus der Liste.
                           }
                         }
