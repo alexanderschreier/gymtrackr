@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../data/db/app_database.dart';
 import '../../data/db/db_provider.dart';
+import 'package:go_router/go_router.dart';
 
 
 class WorkoutSessionPage extends ConsumerWidget {
@@ -23,7 +24,8 @@ class WorkoutSessionPage extends ConsumerWidget {
               tooltip: 'Workout abschließen',
               onPressed: () async {
                 await db.workoutsDao.finish(workoutId, DateTime.now());
-                if (context.mounted) Navigator.of(context).pop();
+                if (!context.mounted) return;
+                context.go('/');
               },
             ),
           ],
