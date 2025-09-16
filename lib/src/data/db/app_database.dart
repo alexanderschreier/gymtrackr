@@ -162,6 +162,9 @@ class ExercisesDao extends DatabaseAccessor<AppDatabase>
     with _$ExercisesDaoMixin {
   ExercisesDao(AppDatabase db) : super(db);
 
+  Future<List<Exercise>> byIds(List<int> ids) =>
+      (select(exercises)..where((t) => t.id.isIn(ids))).get();
+
   Future<int> create(ExercisesCompanion data) => into(exercises).insert(data);
   Future<List<Exercise>> all() => select(exercises).get();
   Stream<List<Exercise>> watchAll() => select(exercises).watch();
@@ -198,6 +201,9 @@ class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
     with _$PlanExercisesDaoMixin {
   PlanExercisesDao(AppDatabase db) : super(db);
 
+  Future<List<PlanExercise>> byIds(List<int> ids) =>
+      (select(planExercises)..where((t) => t.id.isIn(ids))).get();
+
   Future<int> add(PlanExercisesCompanion data) =>
       into(planExercises).insert(data);
 
@@ -215,6 +221,12 @@ class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
 class WorkoutsDao extends DatabaseAccessor<AppDatabase>
     with _$WorkoutsDaoMixin {
   WorkoutsDao(AppDatabase db) : super(db);
+
+  Future<List<Workout>> completedDesc() =>
+      (select(workouts)
+        ..where((w) => w.finishedAt.isNotNull())
+        ..orderBy([(w) => OrderingTerm.desc(w.finishedAt)]))
+          .get();
 
   Future<int> startWorkout(int? planId) =>
       into(workouts).insert(WorkoutsCompanion.insert(planId: Value(planId)));
