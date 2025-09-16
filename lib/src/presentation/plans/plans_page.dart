@@ -1,15 +1,14 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+
 import '../../data/db/app_database.dart';
 import '../../data/db/db_provider.dart';
+import '../../features/workout/service/workout_service.dart';
 import 'plan_editor_page.dart';
-import 'package:go_router/go_router.dart';
-import '../workout/workout_session_page.dart';
-import '../..//features/workout/service/workout_service.dart';
-import 'package:drift/drift.dart' show Value;
 
 enum _PlanAction { rename, delete }
-
 
 class PlansPage extends ConsumerWidget {
   const PlansPage({super.key});
@@ -17,17 +16,22 @@ class PlansPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(appDatabaseProvider);
+    final plansDao = PlansDao(db);
+    final svc = ref.watch(workoutServiceProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pläne')),
-      body: FutureBuilder<List<Plan>>(
-        future: PlansDao(db).all(),
+      body: StreamBuilder<List<Plan>>(
+        stream: plansDao.watchAll(), // live updates
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
           final items = snap.data!;
           if (items.isEmpty) {
             return const Center(child: Text('Noch keine Pläne. Lege den ersten an.'));
           }
+
           return ListView.separated(
             padding: const EdgeInsets.all(12),
             itemCount: items.length,
@@ -37,13 +41,10 @@ class PlansPage extends ConsumerWidget {
               return ListTile(
                 title: Text(p.name),
                 onTap: () async {
-                  // optional: direkt Editor öffnen
-                  await Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => PlanEditorPage(planId: p.id),
-                  ));
-                  (context as Element).markNeedsBuild();
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => PlanEditorPage(planId: p.id)),
+                  );
                 },
-                // NEU: Play + Settings statt Mülleimer
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -51,7 +52,6 @@ class PlansPage extends ConsumerWidget {
                       tooltip: 'Workout starten',
                       icon: const Icon(Icons.play_arrow),
                       onPressed: () async {
-                        final svc = ref.read(workoutServiceProvider);
                         final id = await svc.startWorkout(planId: p.id);
                         if (context.mounted) context.go('/workout/$id');
                       },
@@ -76,6 +76,8 @@ class PlansPage extends ConsumerWidget {
                             ],
                           ),
                         );
+                        if (action == null) return;
+
                         if (action == _PlanAction.rename) {
                           final ctrl = TextEditingController(text: p.name);
                           final ok = await showDialog<bool>(
@@ -87,33 +89,45 @@ class PlansPage extends ConsumerWidget {
                                 decoration: const InputDecoration(labelText: 'Name'),
                               ),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Abbrechen')),
-                                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Speichern')),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Abbrechen'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Speichern'),
+                                ),
                               ],
                             ),
                           );
                           if (ok == true && ctrl.text.trim().isNotEmpty) {
-                            await PlansDao(ref.read(appDatabaseProvider)).updateById(
+                            await plansDao.updateById(
                               p.id,
                               PlansCompanion(name: Value(ctrl.text.trim())),
                             );
-                            (context as Element).markNeedsBuild();
+                            // Durch den Stream aktualisiert sich die Liste sofort.
                           }
                         } else if (action == _PlanAction.delete) {
                           final sure = await showDialog<bool>(
                             context: context,
                             builder: (_) => AlertDialog(
                               title: const Text('Plan löschen?'),
-                              content: Text('Dieser Vorgang kann nicht rückgängig gemacht werden.'),
+                              content: const Text('Dieser Vorgang kann nicht rückgängig gemacht werden.'),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Abbrechen')),
-                                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Löschen')),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Abbrechen'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Löschen'),
+                                ),
                               ],
                             ),
                           );
                           if (sure == true) {
-                            await PlansDao(ref.read(appDatabaseProvider)).deleteById(p.id);
-                            (context as Element).markNeedsBuild();
+                            await plansDao.safeDelete(p.id); // FK-safe: Workouts.planId→NULL, PlanExercises löschen, Plan löschen
+                            // Stream entfernt den Plan sofort aus der Liste.
                           }
                         }
                       },
@@ -121,7 +135,6 @@ class PlansPage extends ConsumerWidget {
                   ],
                 ),
               );
-
             },
           );
         },
@@ -138,16 +151,19 @@ class PlansPage extends ConsumerWidget {
                 decoration: const InputDecoration(labelText: 'Name'),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Abbrechen')),
-                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Anlegen')),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Abbrechen'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Anlegen'),
+                ),
               ],
             ),
           );
           if (ok == true && controller.text.trim().isNotEmpty) {
-            await PlansDao(ref.read(appDatabaseProvider)).create(
-              PlansCompanion.insert(name: controller.text.trim()),
-            );
-            (context as Element).markNeedsBuild();
+            await plansDao.create(PlansCompanion.insert(name: controller.text.trim()));
           }
         },
         icon: const Icon(Icons.add),
