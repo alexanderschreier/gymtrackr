@@ -792,6 +792,11 @@ class $PlanExercisesTable extends PlanExercises
   late final GeneratedColumn<double> initialWeight = GeneratedColumn<double>(
       'initial_weight', aliasedName, true,
       type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+      'notes', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -802,7 +807,8 @@ class $PlanExercisesTable extends PlanExercises
         repMin,
         repMax,
         weightStep,
-        initialWeight
+        initialWeight,
+        notes
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -859,6 +865,10 @@ class $PlanExercisesTable extends PlanExercises
           initialWeight.isAcceptableOrUnknown(
               data['initial_weight']!, _initialWeightMeta));
     }
+    if (data.containsKey('notes')) {
+      context.handle(
+          _notesMeta, notes.isAcceptableOrUnknown(data['notes']!, _notesMeta));
+    }
     return context;
   }
 
@@ -886,6 +896,8 @@ class $PlanExercisesTable extends PlanExercises
           .read(DriftSqlType.double, data['${effectivePrefix}weight_step'])!,
       initialWeight: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}initial_weight']),
+      notes: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}notes']),
     );
   }
 
@@ -905,6 +917,7 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
   final int repMax;
   final double weightStep;
   final double? initialWeight;
+  final String? notes;
   const PlanExercise(
       {required this.id,
       required this.planId,
@@ -914,7 +927,8 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
       required this.repMin,
       required this.repMax,
       required this.weightStep,
-      this.initialWeight});
+      this.initialWeight,
+      this.notes});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -928,6 +942,9 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
     map['weight_step'] = Variable<double>(weightStep);
     if (!nullToAbsent || initialWeight != null) {
       map['initial_weight'] = Variable<double>(initialWeight);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
     }
     return map;
   }
@@ -945,6 +962,8 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
       initialWeight: initialWeight == null && nullToAbsent
           ? const Value.absent()
           : Value(initialWeight),
+      notes:
+          notes == null && nullToAbsent ? const Value.absent() : Value(notes),
     );
   }
 
@@ -961,6 +980,7 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
       repMax: serializer.fromJson<int>(json['repMax']),
       weightStep: serializer.fromJson<double>(json['weightStep']),
       initialWeight: serializer.fromJson<double?>(json['initialWeight']),
+      notes: serializer.fromJson<String?>(json['notes']),
     );
   }
   @override
@@ -976,6 +996,7 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
       'repMax': serializer.toJson<int>(repMax),
       'weightStep': serializer.toJson<double>(weightStep),
       'initialWeight': serializer.toJson<double?>(initialWeight),
+      'notes': serializer.toJson<String?>(notes),
     };
   }
 
@@ -988,7 +1009,8 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
           int? repMin,
           int? repMax,
           double? weightStep,
-          Value<double?> initialWeight = const Value.absent()}) =>
+          Value<double?> initialWeight = const Value.absent(),
+          Value<String?> notes = const Value.absent()}) =>
       PlanExercise(
         id: id ?? this.id,
         planId: planId ?? this.planId,
@@ -1000,6 +1022,7 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
         weightStep: weightStep ?? this.weightStep,
         initialWeight:
             initialWeight.present ? initialWeight.value : this.initialWeight,
+        notes: notes.present ? notes.value : this.notes,
       );
   PlanExercise copyWithCompanion(PlanExercisesCompanion data) {
     return PlanExercise(
@@ -1016,6 +1039,7 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
       initialWeight: data.initialWeight.present
           ? data.initialWeight.value
           : this.initialWeight,
+      notes: data.notes.present ? data.notes.value : this.notes,
     );
   }
 
@@ -1030,14 +1054,15 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
           ..write('repMin: $repMin, ')
           ..write('repMax: $repMax, ')
           ..write('weightStep: $weightStep, ')
-          ..write('initialWeight: $initialWeight')
+          ..write('initialWeight: $initialWeight, ')
+          ..write('notes: $notes')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, planId, exerciseId, order, sets, repMin,
-      repMax, weightStep, initialWeight);
+      repMax, weightStep, initialWeight, notes);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1050,7 +1075,8 @@ class PlanExercise extends DataClass implements Insertable<PlanExercise> {
           other.repMin == this.repMin &&
           other.repMax == this.repMax &&
           other.weightStep == this.weightStep &&
-          other.initialWeight == this.initialWeight);
+          other.initialWeight == this.initialWeight &&
+          other.notes == this.notes);
 }
 
 class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
@@ -1063,6 +1089,7 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
   final Value<int> repMax;
   final Value<double> weightStep;
   final Value<double?> initialWeight;
+  final Value<String?> notes;
   const PlanExercisesCompanion({
     this.id = const Value.absent(),
     this.planId = const Value.absent(),
@@ -1073,6 +1100,7 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
     this.repMax = const Value.absent(),
     this.weightStep = const Value.absent(),
     this.initialWeight = const Value.absent(),
+    this.notes = const Value.absent(),
   });
   PlanExercisesCompanion.insert({
     this.id = const Value.absent(),
@@ -1084,6 +1112,7 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
     this.repMax = const Value.absent(),
     this.weightStep = const Value.absent(),
     this.initialWeight = const Value.absent(),
+    this.notes = const Value.absent(),
   })  : planId = Value(planId),
         exerciseId = Value(exerciseId);
   static Insertable<PlanExercise> custom({
@@ -1096,6 +1125,7 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
     Expression<int>? repMax,
     Expression<double>? weightStep,
     Expression<double>? initialWeight,
+    Expression<String>? notes,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1107,6 +1137,7 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
       if (repMax != null) 'rep_max': repMax,
       if (weightStep != null) 'weight_step': weightStep,
       if (initialWeight != null) 'initial_weight': initialWeight,
+      if (notes != null) 'notes': notes,
     });
   }
 
@@ -1119,7 +1150,8 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
       Value<int>? repMin,
       Value<int>? repMax,
       Value<double>? weightStep,
-      Value<double?>? initialWeight}) {
+      Value<double?>? initialWeight,
+      Value<String?>? notes}) {
     return PlanExercisesCompanion(
       id: id ?? this.id,
       planId: planId ?? this.planId,
@@ -1130,6 +1162,7 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
       repMax: repMax ?? this.repMax,
       weightStep: weightStep ?? this.weightStep,
       initialWeight: initialWeight ?? this.initialWeight,
+      notes: notes ?? this.notes,
     );
   }
 
@@ -1163,6 +1196,9 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
     if (initialWeight.present) {
       map['initial_weight'] = Variable<double>(initialWeight.value);
     }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
     return map;
   }
 
@@ -1177,7 +1213,8 @@ class PlanExercisesCompanion extends UpdateCompanion<PlanExercise> {
           ..write('repMin: $repMin, ')
           ..write('repMax: $repMax, ')
           ..write('weightStep: $weightStep, ')
-          ..write('initialWeight: $initialWeight')
+          ..write('initialWeight: $initialWeight, ')
+          ..write('notes: $notes')
           ..write(')'))
         .toString();
   }
@@ -2824,6 +2861,7 @@ typedef $$PlanExercisesTableCreateCompanionBuilder = PlanExercisesCompanion
   Value<int> repMax,
   Value<double> weightStep,
   Value<double?> initialWeight,
+  Value<String?> notes,
 });
 typedef $$PlanExercisesTableUpdateCompanionBuilder = PlanExercisesCompanion
     Function({
@@ -2836,6 +2874,7 @@ typedef $$PlanExercisesTableUpdateCompanionBuilder = PlanExercisesCompanion
   Value<int> repMax,
   Value<double> weightStep,
   Value<double?> initialWeight,
+  Value<String?> notes,
 });
 
 final class $$PlanExercisesTableReferences
@@ -2917,6 +2956,9 @@ class $$PlanExercisesTableFilterComposer
 
   ColumnFilters<double> get initialWeight => $composableBuilder(
       column: $table.initialWeight, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get notes => $composableBuilder(
+      column: $table.notes, builder: (column) => ColumnFilters(column));
 
   $$PlansTableFilterComposer get planId {
     final $$PlansTableFilterComposer composer = $composerBuilder(
@@ -3011,6 +3053,9 @@ class $$PlanExercisesTableOrderingComposer
       column: $table.initialWeight,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get notes => $composableBuilder(
+      column: $table.notes, builder: (column) => ColumnOrderings(column));
+
   $$PlansTableOrderingComposer get planId {
     final $$PlansTableOrderingComposer composer = $composerBuilder(
         composer: this,
@@ -3081,6 +3126,9 @@ class $$PlanExercisesTableAnnotationComposer
 
   GeneratedColumn<double> get initialWeight => $composableBuilder(
       column: $table.initialWeight, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
 
   $$PlansTableAnnotationComposer get planId {
     final $$PlansTableAnnotationComposer composer = $composerBuilder(
@@ -3177,6 +3225,7 @@ class $$PlanExercisesTableTableManager extends RootTableManager<
             Value<int> repMax = const Value.absent(),
             Value<double> weightStep = const Value.absent(),
             Value<double?> initialWeight = const Value.absent(),
+            Value<String?> notes = const Value.absent(),
           }) =>
               PlanExercisesCompanion(
             id: id,
@@ -3188,6 +3237,7 @@ class $$PlanExercisesTableTableManager extends RootTableManager<
             repMax: repMax,
             weightStep: weightStep,
             initialWeight: initialWeight,
+            notes: notes,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -3199,6 +3249,7 @@ class $$PlanExercisesTableTableManager extends RootTableManager<
             Value<int> repMax = const Value.absent(),
             Value<double> weightStep = const Value.absent(),
             Value<double?> initialWeight = const Value.absent(),
+            Value<String?> notes = const Value.absent(),
           }) =>
               PlanExercisesCompanion.insert(
             id: id,
@@ -3210,6 +3261,7 @@ class $$PlanExercisesTableTableManager extends RootTableManager<
             repMax: repMax,
             weightStep: weightStep,
             initialWeight: initialWeight,
+            notes: notes,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (
