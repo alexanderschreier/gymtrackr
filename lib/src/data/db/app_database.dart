@@ -237,9 +237,6 @@ class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
   (select(planExercises)..where((t) => t.planId.equals(planId))
     ..orderBy([(t) => OrderingTerm.asc(t.order)])).watch();
 
-  Future<List<PlanExercise>> byIds(List<int> ids) =>               // NEU (für History/Details)
-  (select(planExercises)..where((t) => t.id.isIn(ids))).get();
-
   Future<int> removeById(int id) =>
       (delete(planExercises)..where((t) => t.id.equals(id))).go();
 }
