@@ -174,7 +174,7 @@ class PlanEditorPage extends ConsumerWidget {
                           trailing: IconButton(
                             icon: const Icon(Icons.delete),
                             onPressed: () async {
-                              await peDao.removeById(pe.id);
+                              await peDao.safeRemoveById(pe.id);
                             },
                           ),
                         ),

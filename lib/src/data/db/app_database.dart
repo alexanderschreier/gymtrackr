@@ -246,6 +246,17 @@ class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
 
   Future<int> removeById(int id) =>
       (delete(planExercises)..where((t) => t.id.equals(id))).go();
+
+  Future<void> safeRemoveById(int id) async {
+    await transaction(() async {
+      await (attachedDatabase.update(attachedDatabase.workoutSets)
+        ..where((ws) => ws.planExerciseId.equals(id)))
+          .write(const WorkoutSetsCompanion(planExerciseId: Value(null)));
+      await (attachedDatabase.delete(attachedDatabase.planExercises)
+        ..where((t) => t.id.equals(id)))
+          .go();
+    });
+  }
 }
 
 @DriftAccessor(tables: [Workouts])
