@@ -179,12 +179,13 @@ class ExercisesDao extends DatabaseAccessor<AppDatabase>
       (delete(exercises)..where((t) => t.id.equals(id))).go();
 }
 
-@DriftAccessor(tables: [Plans])
+@DriftAccessor(tables: [Plans, Workouts, PlanExercises])
 class PlansDao extends DatabaseAccessor<AppDatabase> with _$PlansDaoMixin {
   PlansDao(AppDatabase db) : super(db);
 
   Future<int> create(PlansCompanion data) => into(plans).insert(data);
   Future<List<Plan>> all() => select(plans).get();
+  Stream<List<Plan>> watchAll() => select(plans).watch();
 
   Future<bool> updateById(int id, PlansCompanion data) async {
     final count =
@@ -192,26 +193,49 @@ class PlansDao extends DatabaseAccessor<AppDatabase> with _$PlansDaoMixin {
     return count > 0;
   }
 
+  /// FK-safe löschen: Workouts.planId -> NULL, PlanExercises löschen, dann Plan löschen
+  Future<void> safeDelete(int id) async {
+    await transaction(() async {
+      // planId in Workouts auf NULL setzen
+      await (attachedDatabase.update(attachedDatabase.workouts)
+        ..where((w) => w.planId.equals(id)))
+          .write(const WorkoutsCompanion(planId: Value(null)));
+
+      // alle PlanExercises zu diesem Plan löschen
+      await (attachedDatabase.delete(attachedDatabase.planExercises)
+        ..where((t) => t.planId.equals(id)))
+          .go();
+
+      // Plan selbst löschen
+      await (attachedDatabase.delete(attachedDatabase.plans)
+        ..where((t) => t.id.equals(id)))
+          .go();
+    });
+  }
+
   Future<int> deleteById(int id) =>
       (delete(plans)..where((t) => t.id.equals(id))).go();
 }
+
 
 @DriftAccessor(tables: [PlanExercises, Exercises])
 class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
     with _$PlanExercisesDaoMixin {
   PlanExercisesDao(AppDatabase db) : super(db);
 
-  Future<List<PlanExercise>> byIds(List<int> ids) =>
-      (select(planExercises)..where((t) => t.id.isIn(ids))).get();
-
   Future<int> add(PlanExercisesCompanion data) =>
       into(planExercises).insert(data);
 
   Future<List<PlanExercise>> byPlan(int planId) =>
-      (select(planExercises)
-        ..where((t) => t.planId.equals(planId))
-        ..orderBy([(t) => OrderingTerm.asc(t.order)]))
-          .get();
+      (select(planExercises)..where((t) => t.planId.equals(planId))
+        ..orderBy([(t) => OrderingTerm.asc(t.order)])).get();
+
+  Stream<List<PlanExercise>> watchByPlan(int planId) =>            // NEU
+  (select(planExercises)..where((t) => t.planId.equals(planId))
+    ..orderBy([(t) => OrderingTerm.asc(t.order)])).watch();
+
+  Future<List<PlanExercise>> byIds(List<int> ids) =>               // NEU (für History/Details)
+  (select(planExercises)..where((t) => t.id.isIn(ids))).get();
 
   Future<int> removeById(int id) =>
       (delete(planExercises)..where((t) => t.id.equals(id))).go();
