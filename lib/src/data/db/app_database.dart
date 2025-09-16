@@ -281,33 +281,84 @@ class WorkoutsDao extends DatabaseAccessor<AppDatabase>
           .write(WorkoutsCompanion(finishedAt: Value(finishedAt)));
 }
 
-@DriftAccessor(tables: [WorkoutSets])
+@DriftAccessor(tables: [WorkoutSets, Workouts])
 class WorkoutSetsDao extends DatabaseAccessor<AppDatabase>
     with _$WorkoutSetsDaoMixin {
   WorkoutSetsDao(AppDatabase db) : super(db);
 
-  Future<int> add(WorkoutSetsCompanion data) =>
-      into(workoutSets).insert(data);
+  /// Einen Satz anlegen
+  Future<int> add(WorkoutSetsCompanion data) => into(workoutSets).insert(data);
 
+  /// Alle Sätze eines Workouts (sortiert nach setIndex)
   Future<List<WorkoutSet>> byWorkout(int workoutId) =>
       (select(workoutSets)
         ..where((t) => t.workoutId.equals(workoutId))
         ..orderBy([(t) => OrderingTerm.asc(t.setIndex)]))
           .get();
 
+  /// Live-Stream für Sätze eines Workouts (optional, praktisch für UI)
+  Stream<List<WorkoutSet>> watchByWorkout(int workoutId) =>
+      (select(workoutSets)
+        ..where((t) => t.workoutId.equals(workoutId))
+        ..orderBy([(t) => OrderingTerm.asc(t.setIndex)]))
+          .watch();
+
+  /// Alle Sätze eines Workouts löschen
   Future<int> removeByWorkout(int workoutId) =>
       (delete(workoutSets)..where((t) => t.workoutId.equals(workoutId))).go();
 
-  Future<bool> updateResult(int id, {double? actualWeight, int? actualReps}) async {
-    final count = await (update(workoutSets)..where((t) => t.id.equals(id))).write(
+  /// Ergebnisfelder (Ist-Gewicht / Ist-Wdh) aktualisieren
+  Future<bool> updateResult(
+      int id, {
+        double? actualWeight,
+        int? actualReps,
+      }) async {
+    final count =
+    await (update(workoutSets)..where((t) => t.id.equals(id))).write(
       WorkoutSetsCompanion(
-        actualWeight: actualWeight == null ? const Value.absent() : Value(actualWeight),
-        actualReps: actualReps == null ? const Value.absent() : Value(actualReps),
+        actualWeight:
+        actualWeight == null ? const Value.absent() : Value(actualWeight),
+        actualReps:
+        actualReps == null ? const Value.absent() : Value(actualReps),
       ),
     );
     return count > 0;
   }
+
+  /// Sätze der *letzten ABGESCHLOSSENEN* Session für diese Plan-Übung (sortiert)
+  Future<List<WorkoutSet>> lastForPlanExercise(int planExerciseId) async {
+    final ws = attachedDatabase.workoutSets;
+    final w = attachedDatabase.workouts;
+
+    // 1) letzte finished workout_id für dieses plan_exercise_id suchen
+    final row = await attachedDatabase.customSelect(
+      '''
+      SELECT ws.workout_id
+      FROM workout_sets ws
+      JOIN workouts w ON w.id = ws.workout_id
+      WHERE ws.plan_exercise_id = ?
+        AND w.finished_at IS NOT NULL
+      ORDER BY w.finished_at DESC, ws.id DESC
+      LIMIT 1
+      ''',
+      variables: [Variable<int>(planExerciseId)],
+      readsFrom: {ws, w},
+    ).getSingleOrNull();
+
+    if (row == null) return [];
+
+    final lastWorkoutId = row.data['workout_id'] as int;
+
+    // 2) alle Sätze dieser (letzten, abgeschlossenen) Session holen
+    return (select(workoutSets)
+      ..where((t) =>
+      t.planExerciseId.equals(planExerciseId) &
+      t.workoutId.equals(lastWorkoutId))
+      ..orderBy([(t) => OrderingTerm.asc(t.setIndex)]))
+        .get();
+  }
 }
+
 
 @DriftAccessor(tables: [Settings])
 class SettingsDao extends DatabaseAccessor<AppDatabase>

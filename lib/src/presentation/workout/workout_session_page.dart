@@ -87,8 +87,13 @@ class WorkoutSessionPage extends ConsumerWidget {
                       Text(exName, style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       ...sets.map((s) {
-                        final weightCtrl = TextEditingController(text: (s.actualWeight ?? s.targetWeight).toString());
-                        final repsCtrl = TextEditingController(text: (s.actualReps ?? '').toString());
+                        final weightCtrl = TextEditingController(
+                          text: (s.actualWeight ?? s.targetWeight).toString(),
+                        );
+                        final repsCtrl = TextEditingController(
+                          text: s.actualReps?.toString() ?? '',
+                        );
+
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
@@ -99,9 +104,18 @@ class WorkoutSessionPage extends ConsumerWidget {
                                 child: TextField(
                                   controller: weightCtrl,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  textInputAction: TextInputAction.done,
                                   decoration: const InputDecoration(labelText: 'Gewicht (kg)'),
+                                  // SPEICHERE BEI JEDEM ÄNDERUNGSEVENT (wenn parsebar)
+                                  onChanged: (v) async {
+                                    final w = double.tryParse(v.replaceAll(',', '.'));
+                                    if (w != null) {
+                                      await WorkoutSetsDao(db).updateResult(s.id, actualWeight: w);
+                                    }
+                                  },
+                                  // zusätzlich falls "Done" gedrückt wird
                                   onSubmitted: (v) async {
-                                    final w = double.tryParse(v);
+                                    final w = double.tryParse(v.replaceAll(',', '.'));
                                     await WorkoutSetsDao(db).updateResult(s.id, actualWeight: w);
                                   },
                                 ),
@@ -112,7 +126,14 @@ class WorkoutSessionPage extends ConsumerWidget {
                                 child: TextField(
                                   controller: repsCtrl,
                                   keyboardType: TextInputType.number,
+                                  textInputAction: TextInputAction.done,
                                   decoration: const InputDecoration(labelText: 'Wdh'),
+                                  onChanged: (v) async {
+                                    final r = int.tryParse(v);
+                                    if (r != null) {
+                                      await WorkoutSetsDao(db).updateResult(s.id, actualReps: r);
+                                    }
+                                  },
                                   onSubmitted: (v) async {
                                     final r = int.tryParse(v);
                                     await WorkoutSetsDao(db).updateResult(s.id, actualReps: r);
@@ -124,6 +145,7 @@ class WorkoutSessionPage extends ConsumerWidget {
                             ],
                           ),
                         );
+
                       }),
                     ],
                   ),
