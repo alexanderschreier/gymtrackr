@@ -41,6 +41,7 @@ class PlanExercises extends Table {
   IntColumn get repMax => integer().withDefault(const Constant(8))();
   RealColumn get weightStep => real().withDefault(const Constant(2.5))();
   RealColumn get initialWeight => real().nullable()();
+  TextColumn get notes => text().nullable()();
 
   @override
   List<String> get customConstraints => [
@@ -108,11 +109,10 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.test() : super(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    // FK-Constraints auf JEDER Connection aktivieren (auch In-Memory bei Tests)
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
@@ -121,7 +121,10 @@ class AppDatabase extends _$AppDatabase {
       await _seedData(this);
     },
     onUpgrade: (m, from, to) async {
-      // zukünftige Migrationen
+      if (from < 2) {
+        // RAW SQL: Spalte 'notes' zu plan_exercises hinzufügen
+        await customStatement('ALTER TABLE plan_exercises ADD COLUMN notes TEXT;');
+      }
     },
   );
 }
