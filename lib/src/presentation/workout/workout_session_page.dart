@@ -46,7 +46,7 @@ class WorkoutSessionPage extends ConsumerWidget {
           final sets = await WorkoutSetsDao(db).byWorkout(workoutId);
           if (sets.isEmpty) return {'grouped': <int, List<WorkoutSet>>{}, 'exById': <int, Exercise>{}};
 
-          final peIds = sets.map((s) => s.planExerciseId).toSet().toList();
+          final peIds = sets.map((s) => s.planExerciseId).whereType<int>().toSet().toList();
           final pes = await PlanExercisesDao(db).byIds(peIds);
           final exIds = pes.map((pe) => pe.exerciseId).toSet().toList();
           final exs = await ExercisesDao(db).byIds(exIds);

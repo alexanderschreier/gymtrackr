@@ -62,8 +62,9 @@ class WorkoutSets extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get workoutId =>
       integer().references(Workouts, #id, onDelete: KeyAction.cascade)();
-  IntColumn get planExerciseId =>
-      integer().references(PlanExercises, #id, onDelete: KeyAction.restrict)();
+  IntColumn get planExerciseId => integer()
+      .nullable()
+      .references(PlanExercises, #id, onDelete: KeyAction.setNull)();
   IntColumn get setIndex => integer()();
   RealColumn get targetWeight => real().withDefault(const Constant(0))();
   RealColumn get actualWeight => real().nullable()();
@@ -109,7 +110,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.test() : super(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -122,8 +123,11 @@ class AppDatabase extends _$AppDatabase {
     },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
-        // RAW SQL: Spalte 'notes' zu plan_exercises hinzufügen
-        await customStatement('ALTER TABLE plan_exercises ADD COLUMN notes TEXT;');
+        await m.addColumn(planExercises, planExercises.notes);
+      }
+      if (from < 3) {
+        // Recreate workout_sets with the new nullable FK (SET NULL) and copy data.
+        await m.alterTable(TableMigration(workoutSets));
       }
     },
   );

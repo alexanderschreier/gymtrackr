@@ -1550,11 +1550,11 @@ class $WorkoutSetsTable extends WorkoutSets
       const VerificationMeta('planExerciseId');
   @override
   late final GeneratedColumn<int> planExerciseId = GeneratedColumn<int>(
-      'plan_exercise_id', aliasedName, false,
+      'plan_exercise_id', aliasedName, true,
       type: DriftSqlType.int,
-      requiredDuringInsert: true,
+      requiredDuringInsert: false,
       defaultConstraints: GeneratedColumn.constraintIsAlways(
-          'REFERENCES plan_exercises (id) ON DELETE RESTRICT'));
+          'REFERENCES plan_exercises (id) ON DELETE SET NULL'));
   static const VerificationMeta _setIndexMeta =
       const VerificationMeta('setIndex');
   @override
@@ -1615,8 +1615,6 @@ class $WorkoutSetsTable extends WorkoutSets
           _planExerciseIdMeta,
           planExerciseId.isAcceptableOrUnknown(
               data['plan_exercise_id']!, _planExerciseIdMeta));
-    } else if (isInserting) {
-      context.missing(_planExerciseIdMeta);
     }
     if (data.containsKey('set_index')) {
       context.handle(_setIndexMeta,
@@ -1656,7 +1654,7 @@ class $WorkoutSetsTable extends WorkoutSets
       workoutId: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}workout_id'])!,
       planExerciseId: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}plan_exercise_id'])!,
+          .read(DriftSqlType.int, data['${effectivePrefix}plan_exercise_id']),
       setIndex: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}set_index'])!,
       targetWeight: attachedDatabase.typeMapping
@@ -1677,7 +1675,7 @@ class $WorkoutSetsTable extends WorkoutSets
 class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
   final int id;
   final int workoutId;
-  final int planExerciseId;
+  final int? planExerciseId;
   final int setIndex;
   final double targetWeight;
   final double? actualWeight;
@@ -1685,7 +1683,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
   const WorkoutSet(
       {required this.id,
       required this.workoutId,
-      required this.planExerciseId,
+      this.planExerciseId,
       required this.setIndex,
       required this.targetWeight,
       this.actualWeight,
@@ -1695,7 +1693,9 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['workout_id'] = Variable<int>(workoutId);
-    map['plan_exercise_id'] = Variable<int>(planExerciseId);
+    if (!nullToAbsent || planExerciseId != null) {
+      map['plan_exercise_id'] = Variable<int>(planExerciseId);
+    }
     map['set_index'] = Variable<int>(setIndex);
     map['target_weight'] = Variable<double>(targetWeight);
     if (!nullToAbsent || actualWeight != null) {
@@ -1711,7 +1711,9 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
     return WorkoutSetsCompanion(
       id: Value(id),
       workoutId: Value(workoutId),
-      planExerciseId: Value(planExerciseId),
+      planExerciseId: planExerciseId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(planExerciseId),
       setIndex: Value(setIndex),
       targetWeight: Value(targetWeight),
       actualWeight: actualWeight == null && nullToAbsent
@@ -1729,7 +1731,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
     return WorkoutSet(
       id: serializer.fromJson<int>(json['id']),
       workoutId: serializer.fromJson<int>(json['workoutId']),
-      planExerciseId: serializer.fromJson<int>(json['planExerciseId']),
+      planExerciseId: serializer.fromJson<int?>(json['planExerciseId']),
       setIndex: serializer.fromJson<int>(json['setIndex']),
       targetWeight: serializer.fromJson<double>(json['targetWeight']),
       actualWeight: serializer.fromJson<double?>(json['actualWeight']),
@@ -1742,7 +1744,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'workoutId': serializer.toJson<int>(workoutId),
-      'planExerciseId': serializer.toJson<int>(planExerciseId),
+      'planExerciseId': serializer.toJson<int?>(planExerciseId),
       'setIndex': serializer.toJson<int>(setIndex),
       'targetWeight': serializer.toJson<double>(targetWeight),
       'actualWeight': serializer.toJson<double?>(actualWeight),
@@ -1753,7 +1755,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
   WorkoutSet copyWith(
           {int? id,
           int? workoutId,
-          int? planExerciseId,
+          Value<int?> planExerciseId = const Value.absent(),
           int? setIndex,
           double? targetWeight,
           Value<double?> actualWeight = const Value.absent(),
@@ -1761,7 +1763,8 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
       WorkoutSet(
         id: id ?? this.id,
         workoutId: workoutId ?? this.workoutId,
-        planExerciseId: planExerciseId ?? this.planExerciseId,
+        planExerciseId:
+            planExerciseId.present ? planExerciseId.value : this.planExerciseId,
         setIndex: setIndex ?? this.setIndex,
         targetWeight: targetWeight ?? this.targetWeight,
         actualWeight:
@@ -1820,7 +1823,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
 class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
   final Value<int> id;
   final Value<int> workoutId;
-  final Value<int> planExerciseId;
+  final Value<int?> planExerciseId;
   final Value<int> setIndex;
   final Value<double> targetWeight;
   final Value<double?> actualWeight;
@@ -1837,13 +1840,12 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
   WorkoutSetsCompanion.insert({
     this.id = const Value.absent(),
     required int workoutId,
-    required int planExerciseId,
+    this.planExerciseId = const Value.absent(),
     required int setIndex,
     this.targetWeight = const Value.absent(),
     this.actualWeight = const Value.absent(),
     this.actualReps = const Value.absent(),
   })  : workoutId = Value(workoutId),
-        planExerciseId = Value(planExerciseId),
         setIndex = Value(setIndex);
   static Insertable<WorkoutSet> custom({
     Expression<int>? id,
@@ -1868,7 +1870,7 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
   WorkoutSetsCompanion copyWith(
       {Value<int>? id,
       Value<int>? workoutId,
-      Value<int>? planExerciseId,
+      Value<int?>? planExerciseId,
       Value<int>? setIndex,
       Value<double>? targetWeight,
       Value<double?>? actualWeight,
@@ -2232,6 +2234,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
                 limitUpdateKind: UpdateKind.delete),
             result: [
               TableUpdate('workout_sets', kind: UpdateKind.delete),
+            ],
+          ),
+          WritePropagation(
+            on: TableUpdateQuery.onTableName('plan_exercises',
+                limitUpdateKind: UpdateKind.delete),
+            result: [
+              TableUpdate('workout_sets', kind: UpdateKind.update),
             ],
           ),
         ],
@@ -3683,7 +3692,7 @@ typedef $$WorkoutSetsTableCreateCompanionBuilder = WorkoutSetsCompanion
     Function({
   Value<int> id,
   required int workoutId,
-  required int planExerciseId,
+  Value<int?> planExerciseId,
   required int setIndex,
   Value<double> targetWeight,
   Value<double?> actualWeight,
@@ -3693,7 +3702,7 @@ typedef $$WorkoutSetsTableUpdateCompanionBuilder = WorkoutSetsCompanion
     Function({
   Value<int> id,
   Value<int> workoutId,
-  Value<int> planExerciseId,
+  Value<int?> planExerciseId,
   Value<int> setIndex,
   Value<double> targetWeight,
   Value<double?> actualWeight,
@@ -3723,9 +3732,9 @@ final class $$WorkoutSetsTableReferences
       db.planExercises.createAlias($_aliasNameGenerator(
           db.workoutSets.planExerciseId, db.planExercises.id));
 
-  $$PlanExercisesTableProcessedTableManager get planExerciseId {
-    final $_column = $_itemColumn<int>('plan_exercise_id')!;
-
+  $$PlanExercisesTableProcessedTableManager? get planExerciseId {
+    final $_column = $_itemColumn<int>('plan_exercise_id');
+    if ($_column == null) return null;
     final manager = $$PlanExercisesTableTableManager($_db, $_db.planExercises)
         .filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_planExerciseIdTable($_db));
@@ -3957,7 +3966,7 @@ class $$WorkoutSetsTableTableManager extends RootTableManager<
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
             Value<int> workoutId = const Value.absent(),
-            Value<int> planExerciseId = const Value.absent(),
+            Value<int?> planExerciseId = const Value.absent(),
             Value<int> setIndex = const Value.absent(),
             Value<double> targetWeight = const Value.absent(),
             Value<double?> actualWeight = const Value.absent(),
@@ -3975,7 +3984,7 @@ class $$WorkoutSetsTableTableManager extends RootTableManager<
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
             required int workoutId,
-            required int planExerciseId,
+            Value<int?> planExerciseId = const Value.absent(),
             required int setIndex,
             Value<double> targetWeight = const Value.absent(),
             Value<double?> actualWeight = const Value.absent(),
