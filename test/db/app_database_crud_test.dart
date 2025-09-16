@@ -92,13 +92,12 @@ void main() {
     });
 
     test('TC-S2.3: Seeds vorhanden (settings + demo exercises)', () async {
-      final fresh = AppDatabase.test();
-      final settings = await SettingsDao(fresh).load();
+      // Prüfe Seeds einfach auf der bestehenden InMemory-DB `db`
+      final settings = await SettingsDao(db).load();
       expect(settings, isNotNull);
 
-      final ex = await ExercisesDao(fresh).all();
+      final ex = await ExercisesDao(db).all();
       expect(ex.length, greaterThanOrEqualTo(2));
-      await fresh.close();
     });
   });
 }

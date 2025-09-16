@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:gymtrackr/src/app.dart';
 
+
 void main() {
   testWidgets('Bottom navigation with 5 tabs is visible and tappable', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: GymTrackrApp()));
