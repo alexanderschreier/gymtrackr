@@ -58,9 +58,9 @@ class WorkoutService {
         for (var i = 0; i < decision.sets.length; i++) {
           final plan = decision.sets[i];
           await _db.workoutSetsDao.add(WorkoutSetsCompanion.insert(
-            workoutId: workoutId,
-            planExerciseId: pe.id,
-            setIndex: i,
+            workoutId: workoutId,             // bleibt int
+            planExerciseId: Value(pe.id),     // <— neu: Value<int?> statt int
+            setIndex: i,                      // bleibt int
             targetWeight: Value(plan.weight),
           ));
         }

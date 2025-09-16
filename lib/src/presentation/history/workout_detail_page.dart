@@ -17,40 +17,48 @@ class WorkoutDetailPage extends ConsumerWidget {
         future: () async {
           final sets = await WorkoutSetsDao(db).byWorkout(workoutId);
 
-          // Namen der Übungen ermitteln
-          final peIds = sets.map((s) => s.planExerciseId).toSet().toList();
-          final planExercises = await PlanExercisesDao(db).byIds(peIds);
-          final exIds = planExercises.map((pe) => pe.exerciseId).toSet().toList();
-          final exercises = await ExercisesDao(db).byIds(exIds);
+          final withPe = sets.where((s) => s.planExerciseId != null).toList();
+          final orphan = sets.where((s) => s.planExerciseId == null).toList();
 
-          final peById = {for (final pe in planExercises) pe.id: pe};
-          final exById = {for (final e in exercises) e.id: e};
+          Map<int, Exercise> exById = {};
+          Map<int, List<WorkoutSet>> grouped = {};
 
-          // Gruppierung: exercise -> sets
-          final Map<int, List<WorkoutSet>> grouped = {};
-          for (final s in sets) {
-            grouped.putIfAbsent(peById[s.planExerciseId]!.exerciseId, () => []).add(s);
+          if (withPe.isNotEmpty) {
+            final peIds = withPe.map((s) => s.planExerciseId!).toSet().toList();
+            final planExercises = await PlanExercisesDao(db).byIds(peIds);
+            final exIds = planExercises.map((pe) => pe.exerciseId).toSet().toList();
+            final exercises = await ExercisesDao(db).byIds(exIds);
+
+            final peById = {for (final pe in planExercises) pe.id: pe};
+            exById = {for (final e in exercises) e.id: e};
+
+            for (final s in withPe) {
+              final exId = peById[s.planExerciseId!]!.exerciseId;
+              grouped.putIfAbsent(exId, () => []).add(s);
+            }
+            // sortiere Sätze
+            for (final list in grouped.values) {
+              list.sort((a, b) => a.setIndex.compareTo(b.setIndex));
+            }
           }
 
-          return {
-            'grouped': grouped,
-            'exById': exById,
-          };
+          return {'grouped': grouped, 'exById': exById, 'orphan': orphan};
         }(),
         builder: (context, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final data = snap.data! as Map;
           final grouped = data['grouped'] as Map<int, List<WorkoutSet>>;
           final exById = data['exById'] as Map<int, Exercise>;
+          final orphan = data['orphan'] as List<WorkoutSet>;
 
-          if (grouped.isEmpty) return const Center(child: Text('Keine Sätze erfasst.'));
+          final children = <Widget>[];
 
-          return ListView(
-            padding: const EdgeInsets.all(12),
-            children: grouped.entries.map((entry) {
-              final exName = exById[entry.key]?.name ?? 'Übung #${entry.key}';
-              final sets = entry.value..sort((a,b) => a.setIndex.compareTo(b.setIndex));
-              return Card(
+          // Bekannte Übungen
+          for (final entry in grouped.entries) {
+            final exName = exById[entry.key]?.name ?? 'Übung #${entry.key}';
+            final sets = entry.value;
+            children.add(
+              Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -72,11 +80,44 @@ class WorkoutDetailPage extends ConsumerWidget {
                     ],
                   ),
                 ),
-              );
-            }).toList(),
-          );
+              ),
+            );
+          }
+
+          // Waisen-Sätze (Plan/Übung gelöscht)
+          if (orphan.isNotEmpty) {
+            orphan.sort((a, b) => a.setIndex.compareTo(b.setIndex));
+            children.add(
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Archivierte Sätze', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      ...orphan.map((s) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Satz ${s.setIndex + 1}'),
+                            Text('Ziel: ${s.targetWeight.toStringAsFixed(1)} kg'),
+                            Text('Ist: ${(s.actualWeight ?? 0).toStringAsFixed(1)} kg / ${s.actualReps ?? 0} Wdh'),
+                          ],
+                        ),
+                      )),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return ListView(padding: const EdgeInsets.all(12), children: children);
         },
       ),
+
     );
   }
 }
