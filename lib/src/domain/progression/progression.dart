@@ -119,3 +119,34 @@ targetRepsMax: config.repRange.max,
 
 return ProgressionDecision(nextWeight: next, sets: plans, rationale: why);
 }
+
+/// Ermittelt Zielgewichte *pro Satz* anhand der letzten Session.
+/// Regel:
+/// - Wenn reps >= repMax -> +step
+/// - Sonst: Gewicht halten
+/// - Falls kein Vorwert vorhanden: initial
+List<double> computeNextTargetsPerSet({
+  required int sets,
+  required double step,
+  required int repMin, // aktuell ungenutzt, aber für spätere Deload-Logik reserviert
+  required int repMax,
+  required double initial,
+  required Map<int, SetResult> lastByIndex, // key = setIndex (0..n-1)
+}) {
+  final next = <double>[];
+  for (var i = 0; i < sets; i++) {
+    final r = lastByIndex[i];
+    if (r == null) {
+      next.add(initial);
+      continue;
+    }
+    final reps = r.reps;
+    final w = r.weight;
+    if (reps >= repMax) {
+      next.add(w + step);
+    } else {
+      next.add(w);
+    }
+  }
+  return next;
+}
