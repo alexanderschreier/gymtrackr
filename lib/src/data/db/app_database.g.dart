@@ -4243,6 +4243,8 @@ mixin _$PlanExercisesDaoMixin on DatabaseAccessor<AppDatabase> {
   $PlansTable get plans => attachedDatabase.plans;
   $ExercisesTable get exercises => attachedDatabase.exercises;
   $PlanExercisesTable get planExercises => attachedDatabase.planExercises;
+  $WorkoutsTable get workouts => attachedDatabase.workouts;
+  $WorkoutSetsTable get workoutSets => attachedDatabase.workoutSets;
 }
 mixin _$WorkoutsDaoMixin on DatabaseAccessor<AppDatabase> {
   $PlansTable get plans => attachedDatabase.plans;

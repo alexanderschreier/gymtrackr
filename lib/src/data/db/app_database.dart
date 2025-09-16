@@ -225,7 +225,7 @@ class PlansDao extends DatabaseAccessor<AppDatabase> with _$PlansDaoMixin {
 }
 
 
-@DriftAccessor(tables: [PlanExercises, Exercises])
+@DriftAccessor(tables: [PlanExercises, Exercises, WorkoutSets])
 class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
     with _$PlanExercisesDaoMixin {
   PlanExercisesDao(AppDatabase db) : super(db);
@@ -237,27 +237,46 @@ class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
       into(planExercises).insert(data);
 
   Future<List<PlanExercise>> byPlan(int planId) =>
-      (select(planExercises)..where((t) => t.planId.equals(planId))
-        ..orderBy([(t) => OrderingTerm.asc(t.order)])).get();
+      (select(planExercises)
+        ..where((t) => t.planId.equals(planId))
+        ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+          .get();
 
-  Stream<List<PlanExercise>> watchByPlan(int planId) =>            // NEU
-  (select(planExercises)..where((t) => t.planId.equals(planId))
-    ..orderBy([(t) => OrderingTerm.asc(t.order)])).watch();
+  Stream<List<PlanExercise>> watchByPlan(int planId) =>
+      (select(planExercises)
+        ..where((t) => t.planId.equals(planId))
+        ..orderBy([(t) => OrderingTerm.asc(t.order)]))
+          .watch();
 
   Future<int> removeById(int id) =>
       (delete(planExercises)..where((t) => t.id.equals(id))).go();
 
+  /// FK-sicher löschen: Zuerst Referenzen in workout_sets auf NULL, dann Eintrag löschen.
   Future<void> safeRemoveById(int id) async {
     await transaction(() async {
       await (attachedDatabase.update(attachedDatabase.workoutSets)
         ..where((ws) => ws.planExerciseId.equals(id)))
           .write(const WorkoutSetsCompanion(planExerciseId: Value(null)));
+
       await (attachedDatabase.delete(attachedDatabase.planExercises)
         ..where((t) => t.id.equals(id)))
           .go();
     });
   }
+
+  /// Einzelne Plan-Übung live beobachten (für Notizen-UI)
+  Stream<PlanExercise?> watchById(int id) =>
+      (select(planExercises)..where((t) => t.id.equals(id))).watchSingleOrNull();
+
+  Future<bool> updateNotes(int id, String? notes) async {
+    final count =
+    await (update(planExercises)..where((t) => t.id.equals(id))).write(
+      PlanExercisesCompanion(notes: Value(notes)),
+    );
+    return count > 0;
+  }
 }
+
 
 @DriftAccessor(tables: [Workouts])
 class WorkoutsDao extends DatabaseAccessor<AppDatabase>
