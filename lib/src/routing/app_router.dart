@@ -15,9 +15,12 @@ GoRouter createRouter() {
       GoRoute(
         path: '/',
         name: 'home',
-        pageBuilder: (context, state) => const NoTransitionPage(
-          child: HomeScaffold(),
-        ),
+        pageBuilder: (context, state) {
+          final initialTab = state.uri.queryParameters['tab'];
+          return NoTransitionPage(
+              child: HomeScaffold(initialTab: initialTab),
+          );
+        }
       ),
       GoRoute(
         path: '/workout/:id',

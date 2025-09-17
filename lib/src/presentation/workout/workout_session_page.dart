@@ -43,7 +43,7 @@ class WorkoutSessionPage extends ConsumerWidget {
 
               await db.workoutsDao.finish(workoutId, DateTime.now());
               if (!context.mounted) return;
-              context.go('/plans'); // zurück zu Pläne
+              context.go('/?tab=plans');
             },
           ),
         ],

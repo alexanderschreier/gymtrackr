@@ -6,14 +6,28 @@ import '../history/history_page.dart';
 import '../settings/settings_page.dart';
 
 class HomeScaffold extends StatefulWidget {
-  const HomeScaffold({super.key});
+  const HomeScaffold({super.key, this.initialTab});
+  final String? initialTab;
 
   @override
   State<HomeScaffold> createState() => _HomeScaffoldState();
 }
 
 class _HomeScaffoldState extends State<HomeScaffold> {
-  int _index = 0;
+  late int _index;
+
+  static const Map<String, int> _slugToIndex = {
+    'today': 0,
+    'plans': 1,
+    'exercises': 2,
+    'history': 3,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _index = _slugToIndex[widget.initialTab ?? 'today'] ?? 0;
+  }
 
   // Wichtig: Liste selbst 'const' UND Elemente 'const'
   static const List<Widget> _pages = <Widget>[
