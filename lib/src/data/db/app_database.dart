@@ -322,6 +322,21 @@ class WorkoutsDao extends DatabaseAccessor<AppDatabase>
     final n = await (delete(workouts)..where((w) => w.id.equals(id))).go();
     return n > 0;
   }
+
+  Stream<List<Workout>> watchCompletedDesc() =>
+      (select(workouts)
+        ..where((w) => w.finishedAt.isNotNull())
+        ..orderBy([(w) => OrderingTerm.desc(w.finishedAt)]))
+          .watch();
+
+
+  Future<int> deleteByIds(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+    return transaction(() async {
+      return (delete(workouts)..where((w) => w.id.isIn(ids))).go();
+    });
+  }
+
 }
 
 
