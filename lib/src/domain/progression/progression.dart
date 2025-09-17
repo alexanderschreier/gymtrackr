@@ -1,7 +1,3 @@
-/// Simple Rep-Range Progression (z. B. 5–8 Wdh.) mit linearem Gewichtsschritt.
-/// Rein fachliche Logik, ohne Flutter/DB-Abhängigkeiten.
-
-
 class RepRange {
   final int min;
   final int max;

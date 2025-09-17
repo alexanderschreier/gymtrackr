@@ -1581,6 +1581,15 @@ class $WorkoutSetsTable extends WorkoutSets
   late final GeneratedColumn<int> actualReps = GeneratedColumn<int>(
       'actual_reps', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _isDoneMeta = const VerificationMeta('isDone');
+  @override
+  late final GeneratedColumn<bool> isDone = GeneratedColumn<bool>(
+      'is_done', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_done" IN (0, 1))'),
+      defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -1589,7 +1598,8 @@ class $WorkoutSetsTable extends WorkoutSets
         setIndex,
         targetWeight,
         actualWeight,
-        actualReps
+        actualReps,
+        isDone
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1640,6 +1650,10 @@ class $WorkoutSetsTable extends WorkoutSets
           actualReps.isAcceptableOrUnknown(
               data['actual_reps']!, _actualRepsMeta));
     }
+    if (data.containsKey('is_done')) {
+      context.handle(_isDoneMeta,
+          isDone.isAcceptableOrUnknown(data['is_done']!, _isDoneMeta));
+    }
     return context;
   }
 
@@ -1663,6 +1677,8 @@ class $WorkoutSetsTable extends WorkoutSets
           .read(DriftSqlType.double, data['${effectivePrefix}actual_weight']),
       actualReps: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}actual_reps']),
+      isDone: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_done'])!,
     );
   }
 
@@ -1680,6 +1696,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
   final double targetWeight;
   final double? actualWeight;
   final int? actualReps;
+  final bool isDone;
   const WorkoutSet(
       {required this.id,
       required this.workoutId,
@@ -1687,7 +1704,8 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
       required this.setIndex,
       required this.targetWeight,
       this.actualWeight,
-      this.actualReps});
+      this.actualReps,
+      required this.isDone});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1704,6 +1722,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
     if (!nullToAbsent || actualReps != null) {
       map['actual_reps'] = Variable<int>(actualReps);
     }
+    map['is_done'] = Variable<bool>(isDone);
     return map;
   }
 
@@ -1722,6 +1741,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
       actualReps: actualReps == null && nullToAbsent
           ? const Value.absent()
           : Value(actualReps),
+      isDone: Value(isDone),
     );
   }
 
@@ -1736,6 +1756,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
       targetWeight: serializer.fromJson<double>(json['targetWeight']),
       actualWeight: serializer.fromJson<double?>(json['actualWeight']),
       actualReps: serializer.fromJson<int?>(json['actualReps']),
+      isDone: serializer.fromJson<bool>(json['isDone']),
     );
   }
   @override
@@ -1749,6 +1770,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
       'targetWeight': serializer.toJson<double>(targetWeight),
       'actualWeight': serializer.toJson<double?>(actualWeight),
       'actualReps': serializer.toJson<int?>(actualReps),
+      'isDone': serializer.toJson<bool>(isDone),
     };
   }
 
@@ -1759,7 +1781,8 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
           int? setIndex,
           double? targetWeight,
           Value<double?> actualWeight = const Value.absent(),
-          Value<int?> actualReps = const Value.absent()}) =>
+          Value<int?> actualReps = const Value.absent(),
+          bool? isDone}) =>
       WorkoutSet(
         id: id ?? this.id,
         workoutId: workoutId ?? this.workoutId,
@@ -1770,6 +1793,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
         actualWeight:
             actualWeight.present ? actualWeight.value : this.actualWeight,
         actualReps: actualReps.present ? actualReps.value : this.actualReps,
+        isDone: isDone ?? this.isDone,
       );
   WorkoutSet copyWithCompanion(WorkoutSetsCompanion data) {
     return WorkoutSet(
@@ -1787,6 +1811,7 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
           : this.actualWeight,
       actualReps:
           data.actualReps.present ? data.actualReps.value : this.actualReps,
+      isDone: data.isDone.present ? data.isDone.value : this.isDone,
     );
   }
 
@@ -1799,14 +1824,15 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
           ..write('setIndex: $setIndex, ')
           ..write('targetWeight: $targetWeight, ')
           ..write('actualWeight: $actualWeight, ')
-          ..write('actualReps: $actualReps')
+          ..write('actualReps: $actualReps, ')
+          ..write('isDone: $isDone')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, workoutId, planExerciseId, setIndex,
-      targetWeight, actualWeight, actualReps);
+      targetWeight, actualWeight, actualReps, isDone);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1817,7 +1843,8 @@ class WorkoutSet extends DataClass implements Insertable<WorkoutSet> {
           other.setIndex == this.setIndex &&
           other.targetWeight == this.targetWeight &&
           other.actualWeight == this.actualWeight &&
-          other.actualReps == this.actualReps);
+          other.actualReps == this.actualReps &&
+          other.isDone == this.isDone);
 }
 
 class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
@@ -1828,6 +1855,7 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
   final Value<double> targetWeight;
   final Value<double?> actualWeight;
   final Value<int?> actualReps;
+  final Value<bool> isDone;
   const WorkoutSetsCompanion({
     this.id = const Value.absent(),
     this.workoutId = const Value.absent(),
@@ -1836,6 +1864,7 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
     this.targetWeight = const Value.absent(),
     this.actualWeight = const Value.absent(),
     this.actualReps = const Value.absent(),
+    this.isDone = const Value.absent(),
   });
   WorkoutSetsCompanion.insert({
     this.id = const Value.absent(),
@@ -1845,6 +1874,7 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
     this.targetWeight = const Value.absent(),
     this.actualWeight = const Value.absent(),
     this.actualReps = const Value.absent(),
+    this.isDone = const Value.absent(),
   })  : workoutId = Value(workoutId),
         setIndex = Value(setIndex);
   static Insertable<WorkoutSet> custom({
@@ -1855,6 +1885,7 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
     Expression<double>? targetWeight,
     Expression<double>? actualWeight,
     Expression<int>? actualReps,
+    Expression<bool>? isDone,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1864,6 +1895,7 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
       if (targetWeight != null) 'target_weight': targetWeight,
       if (actualWeight != null) 'actual_weight': actualWeight,
       if (actualReps != null) 'actual_reps': actualReps,
+      if (isDone != null) 'is_done': isDone,
     });
   }
 
@@ -1874,7 +1906,8 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
       Value<int>? setIndex,
       Value<double>? targetWeight,
       Value<double?>? actualWeight,
-      Value<int?>? actualReps}) {
+      Value<int?>? actualReps,
+      Value<bool>? isDone}) {
     return WorkoutSetsCompanion(
       id: id ?? this.id,
       workoutId: workoutId ?? this.workoutId,
@@ -1883,6 +1916,7 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
       targetWeight: targetWeight ?? this.targetWeight,
       actualWeight: actualWeight ?? this.actualWeight,
       actualReps: actualReps ?? this.actualReps,
+      isDone: isDone ?? this.isDone,
     );
   }
 
@@ -1910,6 +1944,9 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
     if (actualReps.present) {
       map['actual_reps'] = Variable<int>(actualReps.value);
     }
+    if (isDone.present) {
+      map['is_done'] = Variable<bool>(isDone.value);
+    }
     return map;
   }
 
@@ -1922,7 +1959,8 @@ class WorkoutSetsCompanion extends UpdateCompanion<WorkoutSet> {
           ..write('setIndex: $setIndex, ')
           ..write('targetWeight: $targetWeight, ')
           ..write('actualWeight: $actualWeight, ')
-          ..write('actualReps: $actualReps')
+          ..write('actualReps: $actualReps, ')
+          ..write('isDone: $isDone')
           ..write(')'))
         .toString();
   }
@@ -3697,6 +3735,7 @@ typedef $$WorkoutSetsTableCreateCompanionBuilder = WorkoutSetsCompanion
   Value<double> targetWeight,
   Value<double?> actualWeight,
   Value<int?> actualReps,
+  Value<bool> isDone,
 });
 typedef $$WorkoutSetsTableUpdateCompanionBuilder = WorkoutSetsCompanion
     Function({
@@ -3707,6 +3746,7 @@ typedef $$WorkoutSetsTableUpdateCompanionBuilder = WorkoutSetsCompanion
   Value<double> targetWeight,
   Value<double?> actualWeight,
   Value<int?> actualReps,
+  Value<bool> isDone,
 });
 
 final class $$WorkoutSetsTableReferences
@@ -3767,6 +3807,9 @@ class $$WorkoutSetsTableFilterComposer
 
   ColumnFilters<int> get actualReps => $composableBuilder(
       column: $table.actualReps, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isDone => $composableBuilder(
+      column: $table.isDone, builder: (column) => ColumnFilters(column));
 
   $$WorkoutsTableFilterComposer get workoutId {
     final $$WorkoutsTableFilterComposer composer = $composerBuilder(
@@ -3835,6 +3878,9 @@ class $$WorkoutSetsTableOrderingComposer
   ColumnOrderings<int> get actualReps => $composableBuilder(
       column: $table.actualReps, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isDone => $composableBuilder(
+      column: $table.isDone, builder: (column) => ColumnOrderings(column));
+
   $$WorkoutsTableOrderingComposer get workoutId {
     final $$WorkoutsTableOrderingComposer composer = $composerBuilder(
         composer: this,
@@ -3899,6 +3945,9 @@ class $$WorkoutSetsTableAnnotationComposer
 
   GeneratedColumn<int> get actualReps => $composableBuilder(
       column: $table.actualReps, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDone =>
+      $composableBuilder(column: $table.isDone, builder: (column) => column);
 
   $$WorkoutsTableAnnotationComposer get workoutId {
     final $$WorkoutsTableAnnotationComposer composer = $composerBuilder(
@@ -3971,6 +4020,7 @@ class $$WorkoutSetsTableTableManager extends RootTableManager<
             Value<double> targetWeight = const Value.absent(),
             Value<double?> actualWeight = const Value.absent(),
             Value<int?> actualReps = const Value.absent(),
+            Value<bool> isDone = const Value.absent(),
           }) =>
               WorkoutSetsCompanion(
             id: id,
@@ -3980,6 +4030,7 @@ class $$WorkoutSetsTableTableManager extends RootTableManager<
             targetWeight: targetWeight,
             actualWeight: actualWeight,
             actualReps: actualReps,
+            isDone: isDone,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -3989,6 +4040,7 @@ class $$WorkoutSetsTableTableManager extends RootTableManager<
             Value<double> targetWeight = const Value.absent(),
             Value<double?> actualWeight = const Value.absent(),
             Value<int?> actualReps = const Value.absent(),
+            Value<bool> isDone = const Value.absent(),
           }) =>
               WorkoutSetsCompanion.insert(
             id: id,
@@ -3998,6 +4050,7 @@ class $$WorkoutSetsTableTableManager extends RootTableManager<
             targetWeight: targetWeight,
             actualWeight: actualWeight,
             actualReps: actualReps,
+            isDone: isDone,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (
