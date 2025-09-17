@@ -282,6 +282,7 @@ class PlanExercisesDao extends DatabaseAccessor<AppDatabase>
 
 
 @DriftAccessor(tables: [Workouts])
+@DriftAccessor(tables: [Workouts])
 class WorkoutsDao extends DatabaseAccessor<AppDatabase>
     with _$WorkoutsDaoMixin {
   WorkoutsDao(AppDatabase db) : super(db);
@@ -303,7 +304,7 @@ class WorkoutsDao extends DatabaseAccessor<AppDatabase>
       await (update(workouts)..where((t) => t.id.equals(id)))
           .write(WorkoutsCompanion(finishedAt: Value(finishedAt)));
 
-      // Nur für erledigte Sätze (is_done = 1) ggf. actual_weight aus target übernehmen
+      // Nur erledigte Sätze (is_done = 1) ggf. mit target_weight auffüllen
       await attachedDatabase.customStatement(
         'UPDATE workout_sets SET actual_weight = target_weight '
             'WHERE workout_id = ? AND is_done = 1 AND actual_weight IS NULL',
@@ -311,7 +312,18 @@ class WorkoutsDao extends DatabaseAccessor<AppDatabase>
       );
     });
   }
+
+  Future<bool> discard(int id) async {
+    final entry =
+    await (select(workouts)..where((w) => w.id.equals(id))).getSingleOrNull();
+    if (entry == null) return false;            // nichts zu tun
+    if (entry.finishedAt != null) return false; // bereits abgeschlossen -> nicht verwerfen
+
+    final n = await (delete(workouts)..where((w) => w.id.equals(id))).go();
+    return n > 0;
+  }
 }
+
 
 @DriftAccessor(tables: [WorkoutSets, Workouts])
 @DriftAccessor(tables: [WorkoutSets, Workouts])
