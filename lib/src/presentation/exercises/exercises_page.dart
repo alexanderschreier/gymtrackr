@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+
 import '../../data/db/app_database.dart';
 import '../../data/db/db_provider.dart';
 import 'exercise_form_page.dart';
@@ -15,16 +16,19 @@ class ExercisesPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Übungen'),
       ),
-      body: FutureBuilder<List<Exercise>>(
-        future: ExercisesDao(db).all(),
+      body: StreamBuilder<List<Exercise>>(
+        stream: ExercisesDao(db).watchAll(),
         builder: (context, snap) {
           if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final items = snap.data!;
+          final items = [...snap.data!]
+            ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
           if (items.isEmpty) {
             return const Center(child: Text('Noch keine Übungen. Lege die erste an.'));
           }
+
           return ListView.separated(
             padding: const EdgeInsets.all(12),
             itemCount: items.length,
@@ -38,15 +42,49 @@ class ExercisesPage extends ConsumerWidget {
                   icon: const Icon(Icons.delete),
                   tooltip: 'Löschen',
                   onPressed: () async {
-                    await ExercisesDao(db).deleteById(e.id);
-                    (context as Element).markNeedsBuild();
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Übung löschen?'),
+                        content: Text('„${e.name}“ wirklich löschen?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Abbrechen'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Löschen'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+
+                    try {
+                      await ExercisesDao(db).deleteById(e.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('„${e.name}“ gelöscht')),
+                        );
+                      }
+                    } catch (err) {
+                      final msg = err.toString().contains('FOREIGN KEY')
+                          ? 'Kann nicht gelöscht werden: Die Übung wird in Plänen verwendet.'
+                          : 'Löschen fehlgeschlagen: $err';
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(msg)),
+                        );
+                      }
+                    }
                   },
                 ),
                 onTap: () async {
                   await Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => ExerciseFormPage(edit: e),
                   ));
-                  (context as Element).markNeedsBuild();
+                  // kein manuelles Rebuild nötig: StreamBuilder aktualisiert sich selbst
                 },
               );
             },
@@ -59,7 +97,7 @@ class ExercisesPage extends ConsumerWidget {
           await Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => const ExerciseFormPage(),
           ));
-          if (context.mounted) (context as Element).markNeedsBuild();
+          // kein manuelles Rebuild nötig
         },
         icon: const Icon(Icons.add),
         label: const Text('Hinzufügen'),
