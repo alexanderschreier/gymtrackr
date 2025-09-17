@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:drift/drift.dart' show Value;
 
 import '../../data/db/app_database.dart';
 import '../../data/db/db_provider.dart';
@@ -18,6 +17,39 @@ class WorkoutSessionPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text('Workout #$workoutId'),
         actions: [
+          // NEU: Verwerfen-Button (ohne Speichern)
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Ohne Speichern beenden',
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Workout verwerfen?'),
+                  content: const Text(
+                    'Alle Eingaben (Gewichte & Wdh) gehen verloren und die Session erscheint nicht in der Historie.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Abbrechen'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Verwerfen'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true) {
+                await db.workoutsDao.discard(workoutId);
+                if (!context.mounted) return;
+                context.go('/?tab=plans'); // zurück mit Nav
+              }
+            },
+          ),
+
+          // Bereits vorhandener: Speichern/Abschließen
           IconButton(
             icon: const Icon(Icons.check),
             tooltip: 'Workout abschließen',
@@ -43,12 +75,12 @@ class WorkoutSessionPage extends ConsumerWidget {
 
               await db.workoutsDao.finish(workoutId, DateTime.now());
               if (!context.mounted) return;
-              context.go('/?tab=plans');
+              context.go('/?tab=plans'); // zurück zu Pläne (mit Nav)
             },
           ),
         ],
       ),
-      // WICHTIG: Stream für Live-Updates (Gewicht, Reps, isDone)
+
       body: StreamBuilder<List<WorkoutSet>>(
         stream: WorkoutSetsDao(db).watchByWorkout(workoutId),
         builder: (context, setSnap) {
@@ -187,10 +219,16 @@ class WorkoutSessionPage extends ConsumerWidget {
                                 await WorkoutSetsDao(db).setDone(s.id, false);
                                 return;
                               }
-                              // Aktivieren NUR wenn Gewicht & Reps gesetzt:
-                              final parsedW = double.tryParse(weightCtrl.text.replaceAll(',', '.')) ?? s.actualWeight ?? s.targetWeight;
-                              final parsedR = int.tryParse(repsCtrl.text);
-                              if (parsedW == null || parsedR == null) {
+
+                              // Gewicht MUSS vom Nutzer eingegeben sein ODER bereits als actualWeight existieren.
+                              final typedW = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
+                              final hasWeight = (typedW != null) || (s.actualWeight != null);
+
+                              // Reps MUSS eingegeben sein.
+                              final typedR = int.tryParse(repsCtrl.text);
+                              final hasReps = typedR != null;
+
+                              if (!hasWeight || !hasReps) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(content: Text('Bitte zuerst Gewicht und Wdh eintragen.')),
@@ -198,10 +236,17 @@ class WorkoutSessionPage extends ConsumerWidget {
                                 }
                                 return;
                               }
-                              // persistiere aktuelle Werte (falls noch nicht)
-                              await WorkoutSetsDao(db).updateResult(s.id, actualWeight: parsedW, actualReps: parsedR);
+
+                              // Persistiere explizit eingegebene Werte (ohne Fallback auf targetWeight).
+                              await WorkoutSetsDao(db).updateResult(
+                                s.id,
+                                actualWeight: typedW ?? s.actualWeight!, // s.actualWeight ist in diesem Pfad sicher nicht null
+                                actualReps: typedR,
+                              );
+
                               await WorkoutSetsDao(db).setDone(s.id, true);
                             }
+
 
                             final nowW = (s.actualWeight ?? s.targetWeight);
                             final nowR = s.actualReps;
@@ -282,7 +327,7 @@ class WorkoutSessionPage extends ConsumerWidget {
                                     children: [
                                       Text('Ziel: ${s.targetWeight.toStringAsFixed(1)}'),
                                       const Spacer(),
-                                      if (s.isDone && nowW != null && nowR != null)
+                                      if (s.isDone && nowR != null)
                                         Row(
                                           children: [
                                             const Text('Letztes Mal: '),
