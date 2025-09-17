@@ -16,7 +16,9 @@ class WorkoutDetailPage extends ConsumerWidget {
       appBar: AppBar(title: Text('Workout #$workoutId')),
       body: FutureBuilder(
         future: () async {
-          final sets = await WorkoutSetsDao(db).byWorkout(workoutId);
+          final all = await WorkoutSetsDao(db).byWorkout(workoutId);
+
+          final sets = all.where((s) => s.isDone == true).toList();
 
           final withPe = sets.where((s) => s.planExerciseId != null).toList();
           final orphan = sets.where((s) => s.planExerciseId == null).toList();

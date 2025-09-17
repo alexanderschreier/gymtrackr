@@ -48,199 +48,265 @@ class WorkoutSessionPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: FutureBuilder(
-        future: () async {
-          final sets = await WorkoutSetsDao(db).byWorkout(workoutId);
-          if (sets.isEmpty) {
-            return {
-              'grouped': <int, List<WorkoutSet>>{},
-              'exById': <int, Exercise>{},
-              'peById': <int, PlanExercise>{},
-              'orphan': <WorkoutSet>[],
-            };
-          }
-
-          final withPe = sets.where((s) => s.planExerciseId != null).toList();
-          final orphan = sets.where((s) => s.planExerciseId == null).toList();
-
-          final Map<int, List<WorkoutSet>> grouped = {};
-          Map<int, Exercise> exById = {};
-          Map<int, PlanExercise> peById = {};
-
-          if (withPe.isNotEmpty) {
-            final peIds = withPe.map((s) => s.planExerciseId!).toSet().toList();
-            final pes = await PlanExercisesDao(db).byIds(peIds);
-            peById = {for (final pe in pes) pe.id: pe};
-
-            final exIds = pes.map((pe) => pe.exerciseId).toSet().toList();
-            final exs = await ExercisesDao(db).byIds(exIds);
-            exById = {for (final e in exs) e.id: e};
-
-            for (final s in withPe) {
-              final exId = peById[s.planExerciseId!]!.exerciseId;
-              grouped.putIfAbsent(exId, () => []).add(s);
-            }
-            for (final list in grouped.values) {
-              list.sort((a, b) => a.setIndex.compareTo(b.setIndex));
-            }
-          }
-
-          return {
-            'grouped': grouped,
-            'exById': exById,
-            'peById': peById,
-            'orphan': orphan,
-          };
-        }(),
-        builder: (context, snap) {
-          if (!snap.hasData) {
+      // WICHTIG: Stream für Live-Updates (Gewicht, Reps, isDone)
+      body: StreamBuilder<List<WorkoutSet>>(
+        stream: WorkoutSetsDao(db).watchByWorkout(workoutId),
+        builder: (context, setSnap) {
+          if (!setSnap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final data = snap.data! as Map;
-          final grouped = data['grouped'] as Map<int, List<WorkoutSet>>;
-          final exById = data['exById'] as Map<int, Exercise>;
-          final peById = data['peById'] as Map<int, PlanExercise>;
-
-          if (grouped.isEmpty) {
+          final setsAll = setSnap.data!;
+          if (setsAll.isEmpty) {
             return const Center(child: Text('Keine Sätze vorbefüllt.'));
+          }
+
+          final withPe = setsAll.where((s) => s.planExerciseId != null).toList();
+          final Map<int, List<WorkoutSet>> grouped = {};
+          for (final s in withPe) {
+            grouped.putIfAbsent(s.planExerciseId!, () => []).add(s);
+          }
+          for (final list in grouped.values) {
+            list.sort((a, b) => a.setIndex.compareTo(b.setIndex));
           }
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: grouped.entries.map((entry) {
-              final exId = entry.key;
-              final exName = exById[exId]?.name ?? 'Übung #$exId';
+              final peId = entry.key;
               final sets = entry.value;
 
-              // PlanExercise-ID der ersten Zeile dieser Übung (für Notizen)
-              final peId = (sets.isNotEmpty ? sets.first.planExerciseId : null);
+              return FutureBuilder<Map<String, dynamic>>(
+                future: () async {
+                  // Daten für Kopfzeile (Übungsname)
+                  final pe = (await PlanExercisesDao(db).byIds([peId])).firstOrNull;
+                  final ex = pe == null ? null : (await ExercisesDao(db).byIds([pe.exerciseId])).firstOrNull;
 
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(exName, style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
+                  // Vorherige (letzte fertige) Session dieser Plan-Übung
+                  final prev = await WorkoutSetsDao(db).lastForPlanExercise(peId);
+                  final Map<int, WorkoutSet> prevByIndex = {
+                    for (final s in prev) s.setIndex: s
+                  };
 
-                      // Notizen live (nur wenn PlanExercise vorhanden) — einklappbar
-                      if (peId != null) ...[
-                        StreamBuilder<PlanExercise?>(
-                          stream: PlanExercisesDao(db).watchById(peId),
-                          builder: (context, peSnap) {
-                            final peLive = peSnap.data; // kann null werden, falls gelöscht
-                            final notesText = (peLive?.notes ?? '').trim();
+                  return {
+                    'pe': pe,
+                    'ex': ex,
+                    'prevByIndex': prevByIndex,
+                  };
+                }(),
+                builder: (context, snap2) {
+                  if (!snap2.hasData) {
+                    return const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: LinearProgressIndicator(),
+                      ),
+                    );
+                  }
+                  final pe = snap2.data!['pe'] as PlanExercise?;
+                  final ex = snap2.data!['ex'] as Exercise?;
+                  final prevByIndex = snap2.data!['prevByIndex'] as Map<int, WorkoutSet>;
+                  final exName = ex?.name ?? 'Übung #${pe?.exerciseId ?? '?'}';
 
-                            return ExpansionTile(
-                              title: const Text('Notizen'),
-                              subtitle: notesText.isNotEmpty
-                                  ? Text(
-                                notesText,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              )
-                                  : const Text('Keine Notizen'),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: _NotesEditor(
-                                    initial: notesText, // ← immer aktueller DB-Wert
-                                    onSave: (txt) async {
-                                      final ok = await PlanExercisesDao(db).updateNotes(
-                                        peId,
-                                        txt.trim().isEmpty ? null : txt.trim(),
-                                      );
-                                      if (ok && context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Notizen gespeichert')),
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(exName, style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 8),
+
+                          // Notizen live (nur wenn PlanExercise vorhanden) — einklappbar
+                          StreamBuilder<PlanExercise?>(
+                            stream: PlanExercisesDao(db).watchById(peId),
+                            builder: (context, peSnap) {
+                              final peLive = peSnap.data;
+                              final notesText = (peLive?.notes ?? '').trim();
+
+                              return ExpansionTile(
+                                title: const Text('Notizen'),
+                                subtitle: notesText.isNotEmpty
+                                    ? Text(
+                                  notesText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                )
+                                    : const Text('Keine Notizen'),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: _NotesEditor(
+                                      initial: notesText,
+                                      onSave: (txt) async {
+                                        final ok = await PlanExercisesDao(db).updateNotes(
+                                          peId,
+                                          txt.trim().isEmpty ? null : txt.trim(),
                                         );
-                                      }
-                                    },
+                                        if (ok && context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Notizen gespeichert')),
+                                          );
+                                        }
+                                      },
+                                    ),
                                   ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-
-                      // Sätze
-                      ...sets.map((s) {
-                        final weightCtrl = TextEditingController(
-                          text: (s.actualWeight ?? s.targetWeight).toString(),
-                        );
-                        final repsCtrl = TextEditingController(
-                          text: s.actualReps?.toString() ?? '',
-                        );
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              SizedBox(width: 64, child: Text('Satz ${s.setIndex + 1}')),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: weightCtrl,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  textInputAction: TextInputAction.done,
-                                  decoration: const InputDecoration(labelText: 'Gewicht (kg)'),
-                                  onChanged: (v) async {
-                                    final w = double.tryParse(v.replaceAll(',', '.'));
-                                    if (w != null) {
-                                      await WorkoutSetsDao(db).updateResult(s.id, actualWeight: w);
-                                    }
-                                  },
-                                  onSubmitted: (v) async {
-                                    final w = double.tryParse(v.replaceAll(',', '.'));
-                                    await WorkoutSetsDao(db).updateResult(s.id, actualWeight: w);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 80,
-                                child: TextField(
-                                  controller: repsCtrl,
-                                  keyboardType: TextInputType.number,
-                                  textInputAction: TextInputAction.done,
-                                  decoration: const InputDecoration(labelText: 'Wdh'),
-                                  onChanged: (v) async {
-                                    final r = int.tryParse(v);
-                                    if (r != null) {
-                                      final parsedWeight = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
-                                      await WorkoutSetsDao(db).updateResult(
-                                        s.id,
-                                        actualReps: r,
-                                        // falls bisher kein actualWeight gesetzt: nimm Tippfeld -> sonst target
-                                        actualWeight: parsedWeight ?? s.actualWeight ?? s.targetWeight,
-                                      );
-                                    }
-                                  },
-                                  onSubmitted: (v) async {
-                                    final r = int.tryParse(v);
-                                    final parsedWeight = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
-                                    await WorkoutSetsDao(db).updateResult(
-                                      s.id,
-                                      actualReps: r,
-                                      actualWeight: parsedWeight ?? s.actualWeight ?? s.targetWeight,
-                                    );
-                                  },
-                                ),
-                              ),
-
-                              const Spacer(),
-                              Text('Ziel: ${s.targetWeight.toStringAsFixed(1)}'),
-                            ],
+                                ],
+                              );
+                            },
                           ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
+                          const SizedBox(height: 8),
+
+                          // Sätze (mit Checkbox & Vergleich)
+                          ...sets.map((s) {
+                            final weightCtrl = TextEditingController(
+                              text: (s.actualWeight ?? s.targetWeight).toString(),
+                            );
+                            final repsCtrl = TextEditingController(
+                              text: s.actualReps?.toString() ?? '',
+                            );
+
+                            // Vorherige Werte für diesen Satzindex
+                            final prev = prevByIndex[s.setIndex];
+                            final prevW = prev == null ? null : (prev.actualWeight ?? prev.targetWeight);
+                            final prevR = prev?.actualReps;
+
+                            Color _trendColor(double nowW, int nowR, double? lastW, int? lastR) {
+                              if (lastW == null || lastR == null) return Colors.grey;
+                              // Gewicht berücksichtigt:
+                              if (nowW > lastW && nowR >= lastR) return Colors.green;
+                              if (nowW > lastW && nowR < lastR) return Colors.orange; // neutral bei Upweight + fewer reps
+                              if (nowW == lastW && nowR > lastR) return Colors.green;
+                              if (nowW == lastW && nowR == lastR) return Colors.grey;
+                              if (nowW < lastW && nowR >= lastR) return Colors.orange; // neutral
+                              return Colors.red;
+                            }
+
+                            Future<void> _trySetDone(bool newVal) async {
+                              if (newVal == false) {
+                                await WorkoutSetsDao(db).setDone(s.id, false);
+                                return;
+                              }
+                              // Aktivieren NUR wenn Gewicht & Reps gesetzt:
+                              final parsedW = double.tryParse(weightCtrl.text.replaceAll(',', '.')) ?? s.actualWeight ?? s.targetWeight;
+                              final parsedR = int.tryParse(repsCtrl.text);
+                              if (parsedW == null || parsedR == null) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Bitte zuerst Gewicht und Wdh eintragen.')),
+                                  );
+                                }
+                                return;
+                              }
+                              // persistiere aktuelle Werte (falls noch nicht)
+                              await WorkoutSetsDao(db).updateResult(s.id, actualWeight: parsedW, actualReps: parsedR);
+                              await WorkoutSetsDao(db).setDone(s.id, true);
+                            }
+
+                            final nowW = (s.actualWeight ?? s.targetWeight);
+                            final nowR = s.actualReps;
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      SizedBox(width: 56, child: Text('Satz ${s.setIndex + 1}')),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: weightCtrl,
+                                          enabled: !(s.isDone),
+                                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                          textInputAction: TextInputAction.done,
+                                          decoration: const InputDecoration(labelText: 'Gewicht (kg)'),
+                                          onChanged: (v) async {
+                                            if (s.isDone) return;
+                                            final w = double.tryParse(v.replaceAll(',', '.'));
+                                            if (w != null) {
+                                              await WorkoutSetsDao(db).updateResult(s.id, actualWeight: w);
+                                            }
+                                          },
+                                          onSubmitted: (v) async {
+                                            if (s.isDone) return;
+                                            final w = double.tryParse(v.replaceAll(',', '.'));
+                                            await WorkoutSetsDao(db).updateResult(s.id, actualWeight: w);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 80,
+                                        child: TextField(
+                                          controller: repsCtrl,
+                                          enabled: !(s.isDone),
+                                          keyboardType: TextInputType.number,
+                                          textInputAction: TextInputAction.done,
+                                          decoration: const InputDecoration(labelText: 'Wdh'),
+                                          onChanged: (v) async {
+                                            if (s.isDone) return;
+                                            final r = int.tryParse(v);
+                                            if (r != null) {
+                                              final parsedWeight = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
+                                              await WorkoutSetsDao(db).updateResult(
+                                                s.id,
+                                                actualReps: r,
+                                                actualWeight: parsedWeight ?? s.actualWeight ?? s.targetWeight,
+                                              );
+                                            }
+                                          },
+                                          onSubmitted: (v) async {
+                                            if (s.isDone) return;
+                                            final r = int.tryParse(v);
+                                            final parsedWeight = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
+                                            await WorkoutSetsDao(db).updateResult(
+                                              s.id,
+                                              actualReps: r,
+                                              actualWeight: parsedWeight ?? s.actualWeight ?? s.targetWeight,
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Checkbox(
+                                        value: s.isDone,
+                                        onChanged: (val) => _trySetDone(val ?? false),
+                                      ),
+                                    ],
+                                  ),
+
+                                  // Ziel-Anzeige und – falls erledigt – Performance-Vergleich
+                                  Row(
+                                    children: [
+                                      Text('Ziel: ${s.targetWeight.toStringAsFixed(1)}'),
+                                      const Spacer(),
+                                      if (s.isDone && nowW != null && nowR != null)
+                                        Row(
+                                          children: [
+                                            const Text('Letztes Mal: '),
+                                            Text(
+                                              (prevW != null ? '${prevW.toStringAsFixed(1)} kg' : '–') +
+                                                  (prevR != null ? ' × $prevR' : ''),
+                                              style: TextStyle(
+                                                color: _trendColor(nowW, nowR, prevW, prevR),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               );
             }).toList(),
           );

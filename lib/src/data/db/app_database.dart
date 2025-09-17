@@ -69,6 +69,7 @@ class WorkoutSets extends Table {
   RealColumn get targetWeight => real().withDefault(const Constant(0))();
   RealColumn get actualWeight => real().nullable()();
   IntColumn get actualReps => integer().nullable()();
+  BoolColumn get isDone => boolean().withDefault(const Constant(false))();
 
   @override
   List<String> get customConstraints =>
@@ -110,7 +111,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.test() : super(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -126,8 +127,10 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(planExercises, planExercises.notes);
       }
       if (from < 3) {
-        // Recreate workout_sets with the new nullable FK (SET NULL) and copy data.
         await m.alterTable(TableMigration(workoutSets));
+      }
+      if (from < 4) {
+        await m.addColumn(workoutSets, workoutSets.isDone);
       }
     },
   );
@@ -300,16 +303,17 @@ class WorkoutsDao extends DatabaseAccessor<AppDatabase>
       await (update(workouts)..where((t) => t.id.equals(id)))
           .write(WorkoutsCompanion(finishedAt: Value(finishedAt)));
 
-      // Alle Sätze ohne actual_weight bekommen target_weight als tatsächliches Gewicht
+      // Nur für erledigte Sätze (is_done = 1) ggf. actual_weight aus target übernehmen
       await attachedDatabase.customStatement(
         'UPDATE workout_sets SET actual_weight = target_weight '
-            'WHERE workout_id = ? AND actual_weight IS NULL',
+            'WHERE workout_id = ? AND is_done = 1 AND actual_weight IS NULL',
         [id],
       );
     });
   }
 }
 
+@DriftAccessor(tables: [WorkoutSets, Workouts])
 @DriftAccessor(tables: [WorkoutSets, Workouts])
 class WorkoutSetsDao extends DatabaseAccessor<AppDatabase>
     with _$WorkoutSetsDaoMixin {
@@ -325,7 +329,7 @@ class WorkoutSetsDao extends DatabaseAccessor<AppDatabase>
         ..orderBy([(t) => OrderingTerm.asc(t.setIndex)]))
           .get();
 
-  /// Live-Stream für Sätze eines Workouts (optional, praktisch für UI)
+  /// Live-Stream für Sätze eines Workouts (praktisch für UI)
   Stream<List<WorkoutSet>> watchByWorkout(int workoutId) =>
       (select(workoutSets)
         ..where((t) => t.workoutId.equals(workoutId))
@@ -354,13 +358,22 @@ class WorkoutSetsDao extends DatabaseAccessor<AppDatabase>
     return count > 0;
   }
 
-  /// Sätze der *letzten ABGESCHLOSSENEN* Session für diese Plan-Übung (sortiert)
+  /// Satz als erledigt / nicht erledigt markieren
+  Future<bool> setDone(int id, bool done) async {
+    final count = await (update(workoutSets)..where((t) => t.id.equals(id))).write(
+      WorkoutSetsCompanion(isDone: Value(done)),
+    );
+    return count > 0;
+  }
+
+  /// Sätze der *letzten ABGESCHLOSSENEN* Session (nur is_done = true) für diese Plan-Übung (sortiert)
   Future<List<WorkoutSet>> lastForPlanExercise(int planExerciseId) async {
     final ws = attachedDatabase.workoutSets;
     final w = attachedDatabase.workouts;
 
-    // 1) letzte finished workout_id für dieses plan_exercise_id suchen
-    final row = await attachedDatabase.customSelect(
+    // letzte finished workout_id für dieses plan_exercise_id suchen
+    final row = await attachedDatabase
+        .customSelect(
       '''
       SELECT ws.workout_id
       FROM workout_sets ws
@@ -372,21 +385,24 @@ class WorkoutSetsDao extends DatabaseAccessor<AppDatabase>
       ''',
       variables: [Variable<int>(planExerciseId)],
       readsFrom: {ws, w},
-    ).getSingleOrNull();
+    )
+        .getSingleOrNull();
 
     if (row == null) return [];
 
     final lastWorkoutId = row.data['workout_id'] as int;
 
-    // 2) alle Sätze dieser (letzten, abgeschlossenen) Session holen
+    // alle Sätze dieser (letzten, abgeschlossenen) Session holen – nur erledigte
     return (select(workoutSets)
       ..where((t) =>
       t.planExerciseId.equals(planExerciseId) &
-      t.workoutId.equals(lastWorkoutId))
+      t.workoutId.equals(lastWorkoutId) &
+      t.isDone.equals(true))
       ..orderBy([(t) => OrderingTerm.asc(t.setIndex)]))
         .get();
   }
 }
+
 
 
 @DriftAccessor(tables: [Settings])
