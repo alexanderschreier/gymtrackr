@@ -295,9 +295,19 @@ class WorkoutsDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteById(int id) =>
       (delete(workouts)..where((t) => t.id.equals(id))).go();
 
-  Future<int> finish(int id, DateTime finishedAt) =>
-      (update(workouts)..where((t) => t.id.equals(id)))
+  Future<void> finish(int id, DateTime finishedAt) async {
+    await transaction(() async {
+      await (update(workouts)..where((t) => t.id.equals(id)))
           .write(WorkoutsCompanion(finishedAt: Value(finishedAt)));
+
+      // Alle Sätze ohne actual_weight bekommen target_weight als tatsächliches Gewicht
+      await attachedDatabase.customStatement(
+        'UPDATE workout_sets SET actual_weight = target_weight '
+            'WHERE workout_id = ? AND actual_weight IS NULL',
+        [id],
+      );
+    });
+  }
 }
 
 @DriftAccessor(tables: [WorkoutSets, Workouts])

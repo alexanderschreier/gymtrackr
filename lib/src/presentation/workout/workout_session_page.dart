@@ -211,15 +211,27 @@ class WorkoutSessionPage extends ConsumerWidget {
                                   onChanged: (v) async {
                                     final r = int.tryParse(v);
                                     if (r != null) {
-                                      await WorkoutSetsDao(db).updateResult(s.id, actualReps: r);
+                                      final parsedWeight = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
+                                      await WorkoutSetsDao(db).updateResult(
+                                        s.id,
+                                        actualReps: r,
+                                        // falls bisher kein actualWeight gesetzt: nimm Tippfeld -> sonst target
+                                        actualWeight: parsedWeight ?? s.actualWeight ?? s.targetWeight,
+                                      );
                                     }
                                   },
                                   onSubmitted: (v) async {
                                     final r = int.tryParse(v);
-                                    await WorkoutSetsDao(db).updateResult(s.id, actualReps: r);
+                                    final parsedWeight = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
+                                    await WorkoutSetsDao(db).updateResult(
+                                      s.id,
+                                      actualReps: r,
+                                      actualWeight: parsedWeight ?? s.actualWeight ?? s.targetWeight,
+                                    );
                                   },
                                 ),
                               ),
+
                               const Spacer(),
                               Text('Ziel: ${s.targetWeight.toStringAsFixed(1)}'),
                             ],
