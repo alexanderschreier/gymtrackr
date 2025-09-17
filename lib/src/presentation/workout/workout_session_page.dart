@@ -13,11 +13,27 @@ class WorkoutSessionPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(appDatabaseProvider);
 
+    // --- Titel aus Plan-Name (falls vorhanden), sonst "Workout #id"
+    Future<String> _title() async {
+      final w = await (db.select(db.workouts)..where((t) => t.id.equals(workoutId)))
+          .getSingleOrNull();
+      if (w?.planId != null) {
+        final p = await (db.select(db.plans)..where((t) => t.id.equals(w!.planId!)))
+            .getSingleOrNull();
+        if (p != null && p.name.trim().isNotEmpty) return p.name;
+      }
+      return 'Workout #$workoutId';
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Workout #$workoutId'),
+        title: FutureBuilder<String>(
+          future: _title(),
+          builder: (context, snap) =>
+              Text(snap.data ?? 'Workout'),
+        ),
         actions: [
-          // NEU: Verwerfen-Button (ohne Speichern)
+          // Verwerfen (ohne Speichern)
           IconButton(
             icon: const Icon(Icons.close),
             tooltip: 'Ohne Speichern beenden',
@@ -44,12 +60,12 @@ class WorkoutSessionPage extends ConsumerWidget {
               if (ok == true) {
                 await db.workoutsDao.discard(workoutId);
                 if (!context.mounted) return;
-                context.go('/?tab=plans'); // zurück mit Nav
+                context.go('/?tab=plans');
               }
             },
           ),
 
-          // Bereits vorhandener: Speichern/Abschließen
+          // Abschließen (Speichern)
           IconButton(
             icon: const Icon(Icons.check),
             tooltip: 'Workout abschließen',
@@ -75,7 +91,7 @@ class WorkoutSessionPage extends ConsumerWidget {
 
               await db.workoutsDao.finish(workoutId, DateTime.now());
               if (!context.mounted) return;
-              context.go('/?tab=plans'); // zurück zu Pläne (mit Nav)
+              context.go('/?tab=plans');
             },
           ),
         ],
@@ -109,11 +125,11 @@ class WorkoutSessionPage extends ConsumerWidget {
 
               return FutureBuilder<Map<String, dynamic>>(
                 future: () async {
-                  // Daten für Kopfzeile (Übungsname)
                   final pe = (await PlanExercisesDao(db).byIds([peId])).firstOrNull;
-                  final ex = pe == null ? null : (await ExercisesDao(db).byIds([pe.exerciseId])).firstOrNull;
+                  final ex = pe == null
+                      ? null
+                      : (await ExercisesDao(db).byIds([pe.exerciseId])).firstOrNull;
 
-                  // Vorherige (letzte fertige) Session dieser Plan-Übung
                   final prev = await WorkoutSetsDao(db).lastForPlanExercise(peId);
                   final Map<int, WorkoutSet> prevByIndex = {
                     for (final s in prev) s.setIndex: s
@@ -205,12 +221,11 @@ class WorkoutSessionPage extends ConsumerWidget {
 
                             Color _trendColor(double nowW, int nowR, double? lastW, int? lastR) {
                               if (lastW == null || lastR == null) return Colors.grey;
-                              // Gewicht berücksichtigt:
                               if (nowW > lastW && nowR >= lastR) return Colors.green;
-                              if (nowW > lastW && nowR < lastR) return Colors.orange; // neutral bei Upweight + fewer reps
+                              if (nowW > lastW && nowR < lastR) return Colors.orange;
                               if (nowW == lastW && nowR > lastR) return Colors.green;
                               if (nowW == lastW && nowR == lastR) return Colors.grey;
-                              if (nowW < lastW && nowR >= lastR) return Colors.orange; // neutral
+                              if (nowW < lastW && nowR >= lastR) return Colors.orange;
                               return Colors.red;
                             }
 
@@ -220,11 +235,8 @@ class WorkoutSessionPage extends ConsumerWidget {
                                 return;
                               }
 
-                              // Gewicht MUSS vom Nutzer eingegeben sein ODER bereits als actualWeight existieren.
                               final typedW = double.tryParse(weightCtrl.text.replaceAll(',', '.'));
                               final hasWeight = (typedW != null) || (s.actualWeight != null);
-
-                              // Reps MUSS eingegeben sein.
                               final typedR = int.tryParse(repsCtrl.text);
                               final hasReps = typedR != null;
 
@@ -237,16 +249,14 @@ class WorkoutSessionPage extends ConsumerWidget {
                                 return;
                               }
 
-                              // Persistiere explizit eingegebene Werte (ohne Fallback auf targetWeight).
                               await WorkoutSetsDao(db).updateResult(
                                 s.id,
-                                actualWeight: typedW ?? s.actualWeight!, // s.actualWeight ist in diesem Pfad sicher nicht null
+                                actualWeight: typedW ?? s.actualWeight!,
                                 actualReps: typedR,
                               );
 
                               await WorkoutSetsDao(db).setDone(s.id, true);
                             }
-
 
                             final nowW = (s.actualWeight ?? s.targetWeight);
                             final nowR = s.actualReps;
@@ -322,13 +332,14 @@ class WorkoutSessionPage extends ConsumerWidget {
                                     ],
                                   ),
 
-                                  // Ziel-Anzeige und – falls erledigt – Performance-Vergleich
-                                  Row(
-                                    children: [
-                                      Text('Ziel: ${s.targetWeight.toStringAsFixed(1)}'),
-                                      const Spacer(),
-                                      if (s.isDone && nowR != null)
-                                        Row(
+                                  // Nur Vergleich anzeigen (kein "Ziel: ...")
+                                  if (s.isDone && nowR != null)
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             const Text('Letztes Mal: '),
                                             Text(
@@ -341,8 +352,8 @@ class WorkoutSessionPage extends ConsumerWidget {
                                             ),
                                           ],
                                         ),
-                                    ],
-                                  ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             );
