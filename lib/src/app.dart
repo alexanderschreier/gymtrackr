@@ -1,29 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
 import 'routing/app_router.dart';
 
-
-class GymTrackrApp extends StatelessWidget {
+class GymTrackrApp extends ConsumerWidget {
   const GymTrackrApp({super.key});
 
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final router = createRouter();
+
     return MaterialApp.router(
       title: 'GymTrackr',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
+      themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: Colors.blue,
-        brightness: Brightness.light,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: Colors.blue,
-        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.dark,
+        ),
       ),
-      themeMode: ThemeMode.system,
     );
   }
 }
