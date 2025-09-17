@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../presentation/home/home_scaffold.dart';
 import '../presentation/workout/workout_session_page.dart';
 import '../presentation/exercises/exercises_page.dart';
 import '../presentation/plans/plans_page.dart';
 import '../presentation/history/history_page.dart';
 import '../presentation/history/workout_detail_page.dart';
-
 
 GoRouter createRouter() {
   return GoRouter(
